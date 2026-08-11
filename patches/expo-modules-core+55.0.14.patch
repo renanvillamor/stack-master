@@ -1,0 +1,11 @@
+diff --git a/android/cmake/main.cmake b/android/cmake/main.cmake
+--- a/android/cmake/main.cmake
++++ b/android/cmake/main.cmake
+@@ -61,7 +61,8 @@ target_link_libraries(
+   ${LOG_LIB}
+   android
+   ${JSEXECUTOR_LIB}
+   ${NEW_ARCHITECTURE_DEPENDENCIES}
+   expo-modules-jsi
++  c++_shared
+ )
