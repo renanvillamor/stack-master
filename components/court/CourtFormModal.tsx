@@ -50,6 +50,7 @@ export default function CourtFormModal({
       <Modal
         visible={visible}
         onDismiss={onDismiss}
+        testID="court-form-modal"
         contentContainerStyle={{
           backgroundColor: theme.colors.surface,
           margin: 24,
@@ -68,17 +69,21 @@ export default function CourtFormModal({
           onChangeText={setName}
           mode="outlined"
           autoFocus
+          testID="court-form-name-input"
           style={{ marginBottom: 20 }}
           onSubmitEditing={handleSubmit}
           returnKeyType="done"
         />
 
         <View className="flex-row justify-end gap-2">
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onDismiss} testID="court-form-cancel">
+            Cancel
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
             disabled={!name.trim()}
+            testID="court-form-submit"
           >
             {court ? "Save" : "Add"}
           </Button>

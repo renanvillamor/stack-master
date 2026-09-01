@@ -31,12 +31,14 @@ interface OptionPickerSheetProps {
   options: OptionItem[];
   selectedValue: string;
   onSelect: (value: string) => void;
+  /** Prefixes each option row's testID as `${testIDPrefix}-${option.value}`, to disambiguate this sheet's rows from another OptionPickerSheet's identically-valued rows. */
+  testIDPrefix?: string;
 }
 
 const OptionPickerSheet = forwardRef<
   OptionPickerSheetRef,
   OptionPickerSheetProps
->(({ title, options, selectedValue, onSelect }, ref) => {
+>(({ title, options, selectedValue, onSelect, testIDPrefix }, ref) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -85,6 +87,7 @@ const OptionPickerSheet = forwardRef<
           return (
             <TouchableOpacity
               key={option.value}
+              testID={testIDPrefix ? `${testIDPrefix}-${option.value}` : undefined}
               onPress={() => {
                 sheetRef.current?.dismiss();
                 onSelect(option.value);

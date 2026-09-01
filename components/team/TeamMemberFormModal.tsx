@@ -71,6 +71,7 @@ export default function TeamMemberFormModal({ visible, member, onDismiss }: Prop
           padding: 24,
           ...(isLandscape && { alignSelf: "center", width: "50%" }),
         }}
+        testID="team-member-form-modal"
       >
         <Text variant="titleLarge" style={{ marginBottom: 16 }}>
           {member ? "Edit Member" : "Add Member"}
@@ -86,6 +87,7 @@ export default function TeamMemberFormModal({ visible, member, onDismiss }: Prop
           style={{ marginBottom: 16 }}
           onSubmitEditing={handleSubmit}
           returnKeyType="done"
+          testID="team-member-form-name-input"
         />
 
         <Text
@@ -109,6 +111,7 @@ export default function TeamMemberFormModal({ visible, member, onDismiss }: Prop
               <Chip
                 key={formatRating(option)}
                 onPress={() => setRating(option)}
+                testID={`team-member-form-rating-${formatRating(option)}`}
                 style={{
                   backgroundColor: selected
                     ? theme.colors.primary
@@ -129,11 +132,14 @@ export default function TeamMemberFormModal({ visible, member, onDismiss }: Prop
         </View>
 
         <View className="flex-row justify-end gap-2">
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onDismiss} testID="team-member-form-cancel">
+            Cancel
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
             disabled={!name.trim()}
+            testID="team-member-form-submit"
           >
             {member ? "Save" : "Add"}
           </Button>

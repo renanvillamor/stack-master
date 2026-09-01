@@ -36,8 +36,11 @@ export default function ConfirmDialog({
           <Text variant="bodyMedium">{message}</Text>
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button testID="confirm-dialog-cancel" onPress={onDismiss}>
+            Cancel
+          </Button>
           <Button
+            testID="confirm-dialog-confirm"
             onPress={onConfirm}
             textColor={destructive ? "#BA1A1A" : undefined}
           >

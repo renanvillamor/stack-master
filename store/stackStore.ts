@@ -1,4 +1,5 @@
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { PlayerRating, Stack, StackType } from "@/types";
 import {
@@ -228,7 +229,13 @@ function planAutoFill(
   // stacking is on, since crossing that boundary would visibly reshuffle
   // the beginner/advanced columns.
   const multiGroup = isMultiGroupEnabled();
-  const queued = stacks.filter((s) => s.courtId === null);
+  // Quorum stacks are a fixed, immovable group of 4 — auto-fill must never
+  // scatter their members into other stacks or backfill someone else in.
+  const isQuorumStack = (stackId: string) =>
+    useQuorumStore.getState().quorums.some((q) => q.stackId === stackId);
+  const queued = stacks.filter(
+    (s) => s.courtId === null && !isQuorumStack(s.id),
+  );
 
   const buckets = new Map<string, Stack[]>();
   for (const s of queued) {
@@ -290,6 +297,7 @@ function addToQueue(
   stacks: Stack[],
   playerId: string,
   type: StackType = "default",
+  excludeStackIds: string[] = [],
 ) {
   const alreadyQueued = stacks.some(
     (s) =>
@@ -305,7 +313,8 @@ function addToQueue(
     s.courtId === null &&
     (s.type ?? "default") === type &&
     s.team1.playerIds.length + s.team2.playerIds.length < 4 &&
-    groupAllows(groupOfStack(s), requiredGroup);
+    groupAllows(groupOfStack(s), requiredGroup) &&
+    !excludeStackIds.includes(s.id);
 
   // Prefer joining the locked partner's stack, if they're already queued.
   const partnerStack = partnerId
@@ -893,14 +902,45 @@ export const useStackStore = create<StackState>()(
               }
 
               // No stack can seat both while splitting them onto opposite
-              // teams — fall back to topping off any vacant slot one at a
-              // time instead of leaving it empty and spinning up a fresh
-              // stack for both.
-              const freshIds = [
-                ...(fresh1 ? [id1] : []),
-                ...(fresh2 ? [id2] : []),
-              ];
-              addManyToQueue(state.stacks, freshIds, type);
+              // teams. If an existing queued stack of this type is merely
+              // incomplete (just full on one team), top it off one at a time
+              // instead of leaving it short a player — the queue-completion
+              // goal outranks the opposite-team preference here. id1 and id2
+              // were just teammates (that's why they couldn't be split), so
+              // id2 is barred from following id1 into the same stack — that
+              // would just reunite them as teammates again, defeating
+              // shuffle. id2 instead tops off the next stack with room, or
+              // gets a new one. Only when there's nothing existing to top
+              // off do we spin up a single fresh stack with id1 on team1 and
+              // id2 on team2, rather than two separate singleton stacks.
+              const hasExistingIncomplete = state.stacks.some(
+                (s) =>
+                  s.courtId === null &&
+                  (s.type ?? "default") === type &&
+                  s.team1.playerIds.length + s.team2.playerIds.length < 4 &&
+                  groupAllows(groupOfStack(s), requiredGroup),
+              );
+              if (hasExistingIncomplete) {
+                let id1StackId: string | undefined;
+                if (fresh1) {
+                  addToQueue(state.stacks, id1, type);
+                  id1StackId = state.stacks.find(
+                    (s) =>
+                      s.team1.playerIds.includes(id1) ||
+                      s.team2.playerIds.includes(id1),
+                  )?.id;
+                }
+                if (fresh2) {
+                  addToQueue(
+                    state.stacks,
+                    id2,
+                    type,
+                    id1StackId ? [id1StackId] : [],
+                  );
+                }
+              } else {
+                addSplitToQueue(state.stacks, id1, id2, type);
+              }
             };
             // Locked pairs stay together as teammates regardless of shuffle.
             // Splitting requires exactly 2 on each side (cross-locked pairs

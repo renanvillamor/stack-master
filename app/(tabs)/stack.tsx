@@ -8,12 +8,15 @@ import CourtPickerModal from "@/components/stack/CourtPickerModal";
 import MoveToStackDialog from "@/components/stack/MoveToStackDialog";
 import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
 import StackCard from "@/components/stack/StackCard";
+import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
-import { PlayerRating, Stack } from "@/types";
+import { Player, PlayerRating, Stack } from "@/types";
 import { getStackGroup } from "@/utils/groupQueue";
+import { findLockedOutsideQuorum } from "@/utils/quorum";
 import React, { useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import { Button, Icon, IconButton, Text, useTheme } from "react-native-paper";
@@ -28,6 +31,7 @@ interface GroupColumnProps {
   /** Shows a per-column "Auto-fill" button when true. Omit entirely for columns (e.g. Unsorted) that shouldn't offer it. */
   canAutoFill?: boolean;
   onAutoFill?: () => void;
+  testID?: string;
 }
 
 /** One half of the beginner/advanced split queue — its own header and independently scrolling list. */
@@ -40,6 +44,7 @@ function GroupColumn({
   renderCard,
   canAutoFill,
   onAutoFill,
+  testID,
 }: GroupColumnProps) {
   const theme = useTheme();
   return (
@@ -93,6 +98,7 @@ function GroupColumn({
             iconColor={color}
             onPress={onAutoFill}
             style={{ margin: 0 }}
+            testID={testID}
           />
         )}
       </View>
@@ -138,6 +144,8 @@ export default function StackScreen() {
   } = useStackStore();
   const { courts, addCourt } = useCourtStore();
   const { players, updatePlayerStatus } = usePlayerStore();
+  const { quorums, createQuorum, removeQuorum, removeQuorumForStack } =
+    useQuorumStore();
   const { landscapeColumns, multiGroupStack } = useSettingsStore();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -145,7 +153,6 @@ export default function StackScreen() {
 
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null);
   const [clearTarget, setClearTarget] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [courtPickerStack, setCourtPickerStack] = useState<Stack | null>(null);
   // Player-level actions
   const [playerTarget, setPlayerTarget] = useState<{
@@ -162,18 +169,23 @@ export default function StackScreen() {
     stackId: string;
     playerId: string;
   } | null>(null);
+  const [historyPlayer, setHistoryPlayer] = useState<Player | null>(null);
   const [moveToStackDialog, setMoveToStackDialog] = useState<{
     fromStackId: string;
     playerId: string;
   } | null>(null);
-  const [crossSwapDialog, setCrossSwapDialog] = useState<{
+  const [pendingSwap, setPendingSwap] = useState<{
     fromStackId: string;
     movingId: string;
     toStackId: string;
-    candidates: string[];
+    targetPlayerId: string;
   } | null>(null);
   const [pairMoveNoSpace, setPairMoveNoSpace] = useState(false);
   const [noSwapCandidates, setNoSwapCandidates] = useState(false);
+  const [lockedOutsideQuorum, setLockedOutsideQuorum] = useState<
+    { playerId: string; playerName: string; partnerName: string }[] | null
+  >(null);
+  const [quorumMemberConflict, setQuorumMemberConflict] = useState(false);
   const sheetRef = useRef<ActionBottomSheetRef>(null);
   const playerSheetRef = useRef<ActionBottomSheetRef>(null);
 
@@ -188,6 +200,22 @@ export default function StackScreen() {
 
   const isPlayerLocked = (playerId: string) =>
     !!players.find((p) => p.id === playerId)?.lockedPartnerId;
+
+  /** Ids of playerId's teammates in their most recently recorded match, or none if they haven't played yet. */
+  const lastMatchTeammateIds = (playerId: string): string[] => {
+    const history = players.find((p) => p.id === playerId)?.history;
+    return history?.[history.length - 1]?.teammateIds ?? [];
+  };
+
+  /** True when idA and idB were teammates in their most recent match — a repeat team combo worth flagging. */
+  const isRepeatTeam = (idA: string, idB: string) =>
+    lastMatchTeammateIds(idA).includes(idB) ||
+    lastMatchTeammateIds(idB).includes(idA);
+
+  const getQuorumForStack = (stackId: string) =>
+    quorums.find((q) => q.stackId === stackId);
+
+  const isStackQuorum = (stackId: string) => !!getQuorumForStack(stackId);
 
   const getCourtName = (courtId: string | null) =>
     courtId ? courts.find((c) => c.id === courtId)?.name : undefined;
@@ -275,19 +303,39 @@ export default function StackScreen() {
     if (!clearTarget) return;
     const removed = removeStack(clearTarget);
     if (removed) freeStackPlayers(removed);
+    removeQuorumForStack(clearTarget);
     setClearTarget(null);
-  };
-
-  const confirmRemoveStack = () => {
-    if (!removeTarget) return;
-    const removed = removeStack(removeTarget);
-    if (removed) freeStackPlayers(removed);
-    setRemoveTarget(null);
   };
 
   const stackIndex = selectedStack
     ? stacks.findIndex((s) => s.id === selectedStack.id) + 1
     : 0;
+
+  const selectedStackQuorum = selectedStack
+    ? getQuorumForStack(selectedStack.id)
+    : undefined;
+  const selectedStackFull = selectedStack
+    ? selectedStack.team1.playerIds.length +
+        selectedStack.team2.playerIds.length ===
+      4
+    : false;
+  const selectedStackPlayerIds = selectedStack
+    ? [...selectedStack.team1.playerIds, ...selectedStack.team2.playerIds]
+    : [];
+
+  const handleMarkAsQuorum = () => {
+    if (!selectedStack) return;
+    const conflicts = findLockedOutsideQuorum(selectedStackPlayerIds, players);
+    if (conflicts.length > 0) {
+      setLockedOutsideQuorum(conflicts);
+      return;
+    }
+    if (selectedStackPlayerIds.some((id) => quorums.find((q) => q.playerIds.includes(id)))) {
+      setQuorumMemberConflict(true);
+      return;
+    }
+    createQuorum(selectedStackPlayerIds, selectedStack.id);
+  };
 
   const stackActions: ActionItem[] = [
     selectedStack && selectedStack.id === pinnedStackId
@@ -295,65 +343,90 @@ export default function StackScreen() {
           label: "Unpin from Up Next",
           icon: "pin-off-outline",
           onPress: () => setPinnedStack(null),
+          testID: "stack-action-unpin",
         }
       : {
           label: "Set as Up Next",
           icon: "pin-outline",
           onPress: () => setPinnedStack(selectedStack?.id ?? null),
+          testID: "stack-action-set-up-next",
+        },
+    selectedStackQuorum
+      ? {
+          label: "Remove Quorum",
+          icon: "account-group-outline",
+          onPress: () => removeQuorum(selectedStackQuorum.id),
+          testID: "stack-action-remove-quorum",
+        }
+      : {
+          label: "Mark as Quorum",
+          icon: "account-group-outline",
+          onPress: handleMarkAsQuorum,
+          disabled: !selectedStackFull,
+          testID: "stack-action-mark-quorum",
         },
     {
       label: "Clear Stack",
       icon: "playlist-remove",
       onPress: () => setClearTarget(selectedStack?.id ?? null),
-    },
-    {
-      label: "Remove",
-      icon: "delete-outline",
-      destructive: true,
-      onPress: () => setRemoveTarget(selectedStack?.id ?? null),
+      testID: "stack-action-clear",
     },
   ];
 
-  const handleMoveToStack = (toStackId: string) => {
-    if (!moveToStackDialog) return;
-    const { fromStackId, playerId } = moveToStackDialog;
-    const toStack = stacks.find((s) => s.id === toStackId);
-    if (!toStack) return;
-
+  /** Locked partner queued elsewhere — the store moves the pair as a unit, so target selection is a whole-card tap rather than a per-player swap pick. */
+  const isPairedMove = (playerId: string) => {
     const partnerId = players.find((p) => p.id === playerId)?.lockedPartnerId;
-    const partnerQueued =
+    return (
       !!partnerId &&
       queuedStacks.some(
         (s) =>
           s.team1.playerIds.includes(partnerId) ||
           s.team2.playerIds.includes(partnerId),
-      );
+      )
+    );
+  };
 
-    if (partnerQueued) {
+  const handleMoveToStack = (toStackId: string) => {
+    if (!moveToStackDialog) return;
+    const { fromStackId, playerId } = moveToStackDialog;
+
+    if (isPairedMove(playerId)) {
       // Pair-aware move — the store aborts (and we surface an error) if
       // there's no room for both partners on one team of the destination.
-      // The single-player cross-swap picker below doesn't apply here.
       const moved = movePlayerBetweenStacks(fromStackId, playerId, toStackId);
       setMoveToStackDialog(null);
       if (!moved) setPairMoveNoSpace(true);
       return;
     }
 
-    const total =
-      toStack.team1.playerIds.length + toStack.team2.playerIds.length;
-    if (total < 4) {
-      movePlayerBetweenStacks(fromStackId, playerId, toStackId);
-      setMoveToStackDialog(null);
-    } else {
-      // Full — open cross-swap picker
-      setCrossSwapDialog({
-        fromStackId,
-        movingId: playerId,
-        toStackId,
-        candidates: [...toStack.team1.playerIds, ...toStack.team2.playerIds],
-      });
-      setMoveToStackDialog(null);
-    }
+    // Only reachable when the destination has an open seat — full stacks
+    // require picking a specific player to swap with instead (see
+    // handleSelectSwapTarget), so this is a direct, unambiguous move.
+    movePlayerBetweenStacks(fromStackId, playerId, toStackId);
+    setMoveToStackDialog(null);
+  };
+
+  /** User tapped a specific occupied player in a full target stack — stage the swap for confirmation instead of applying it immediately. */
+  const handleSelectSwapTarget = (toStackId: string, targetPlayerId: string) => {
+    if (!moveToStackDialog) return;
+    setPendingSwap({
+      fromStackId: moveToStackDialog.fromStackId,
+      movingId: moveToStackDialog.playerId,
+      toStackId,
+      targetPlayerId,
+    });
+    setMoveToStackDialog(null);
+  };
+
+  const confirmPendingSwap = () => {
+    if (!pendingSwap) return;
+    swapPlayersBetweenStacks(
+      pendingSwap.fromStackId,
+      pendingSwap.movingId,
+      pendingSwap.toStackId,
+      pendingSwap.targetPlayerId,
+    );
+    setPendingSwap(null);
   };
 
   const handleCreateNewStack = () => {
@@ -370,10 +443,25 @@ export default function StackScreen() {
       icon: "swap-horizontal",
       onPress: handleSwitchTeam,
       disabled: !!playerTarget && isPlayerLocked(playerTarget.playerId),
+      testID: "stack-player-action-switch-team",
+    },
+    {
+      label: "Match History",
+      icon: "history",
+      onPress: () => {
+        if (playerTarget) {
+          setHistoryPlayer(
+            players.find((p) => p.id === playerTarget.playerId) ?? null,
+          );
+        }
+        setPlayerTarget(null);
+      },
+      testID: "stack-player-action-history",
     },
     {
       label: "Move to Stack",
       icon: "swap-vertical",
+      disabled: !!playerTarget && isStackQuorum(playerTarget.stackId),
       onPress: () => {
         if (playerTarget) {
           setMoveToStackDialog({
@@ -383,11 +471,13 @@ export default function StackScreen() {
         }
         setPlayerTarget(null);
       },
+      testID: "stack-player-action-move-to-stack",
     },
     {
       label: "Remove from Stack",
       icon: "account-minus-outline",
       destructive: true,
+      disabled: !!playerTarget && isStackQuorum(playerTarget.stackId),
       onPress: () => {
         if (playerTarget) {
           setRemovePlayerTarget({
@@ -397,6 +487,7 @@ export default function StackScreen() {
         }
         setPlayerTarget(null);
       },
+      testID: "stack-player-action-remove-from-stack",
     },
   ];
 
@@ -444,8 +535,10 @@ export default function StackScreen() {
       getPlayerRating={getPlayerRating}
       getPlayerLastPlayed={getPlayerLastPlayed}
       isPlayerLocked={isPlayerLocked}
+      isRepeatTeam={isRepeatTeam}
       isUpNext={item.id === suggestedNextStackId}
       isPinned={item.id === pinnedStackId}
+      isQuorum={isStackQuorum(item.id)}
       showLabel={!multiGroupStack}
       onMorePress={() => handleMorePress(item)}
       onMoveToCourt={() => handleMoveToCourt(item)}
@@ -503,7 +596,7 @@ export default function StackScreen() {
     <View className="flex-1 bg-app-bg pt-20">
       {canAutoFill && (
         <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}>
-          <Button mode="contained-tonal" icon="auto-fix" onPress={() => autoFillQueue()}>
+          <Button mode="contained-tonal" icon="auto-fix" onPress={() => autoFillQueue()} testID="stack-autofill">
             Auto-fill vacant slots
           </Button>
         </View>
@@ -529,6 +622,7 @@ export default function StackScreen() {
               renderCard={renderStackCard}
               canAutoFill={canAutoFillBeginner}
               onAutoFill={() => autoFillQueue("beginner")}
+              testID="stack-autofill-beginner"
             />
             <View
               style={{
@@ -546,6 +640,7 @@ export default function StackScreen() {
               renderCard={renderStackCard}
               canAutoFill={canAutoFillAdvanced}
               onAutoFill={() => autoFillQueue("advanced")}
+              testID="stack-autofill-advanced"
             />
           </View>
           {unsortedStacks.length > 0 && (
@@ -598,15 +693,6 @@ export default function StackScreen() {
         onDismiss={() => setClearTarget(null)}
       />
 
-      <ConfirmDialog
-        visible={!!removeTarget}
-        title="Remove Stack"
-        message="Remove this stack? All players will be marked as Available."
-        confirmLabel="Remove"
-        onConfirm={confirmRemoveStack}
-        onDismiss={() => setRemoveTarget(null)}
-      />
-
       <CourtPickerModal
         visible={courtPickerStack !== null}
         courts={availableCourts}
@@ -619,6 +705,12 @@ export default function StackScreen() {
         ref={playerSheetRef}
         title={playerTarget ? getPlayerName(playerTarget.playerId) : undefined}
         actions={playerActions}
+      />
+
+      <PlayerMatchHistoryDialog
+        player={historyPlayer}
+        getPlayerName={getPlayerName}
+        onDismiss={() => setHistoryPlayer(null)}
       />
 
       <PlayerPickerDialog
@@ -661,13 +753,35 @@ export default function StackScreen() {
 
       <MoveToStackDialog
         visible={!!moveToStackDialog}
-        queuedStacks={queuedStacks}
+        queuedStacks={queuedStacks.filter((s) => !isStackQuorum(s.id))}
         fromStackId={moveToStackDialog?.fromStackId ?? null}
+        movingPlayerName={
+          moveToStackDialog ? getPlayerName(moveToStackDialog.playerId) : undefined
+        }
+        pairedMove={
+          moveToStackDialog ? isPairedMove(moveToStackDialog.playerId) : false
+        }
         getPlayerName={getPlayerName}
         getPlayerRating={getPlayerRating}
+        isPlayerLocked={isPlayerLocked}
         onSelectStack={handleMoveToStack}
+        onSelectSwapTarget={handleSelectSwapTarget}
         onCreateNewStack={handleCreateNewStack}
         onDismiss={() => setMoveToStackDialog(null)}
+      />
+
+      <ConfirmDialog
+        visible={!!pendingSwap}
+        title="Confirm Swap"
+        message={
+          pendingSwap
+            ? `Swap ${getPlayerName(pendingSwap.movingId)} with ${getPlayerName(pendingSwap.targetPlayerId)}?`
+            : ""
+        }
+        confirmLabel="Swap"
+        destructive={false}
+        onConfirm={confirmPendingSwap}
+        onDismiss={() => setPendingSwap(null)}
       />
 
       <AlertDialog
@@ -684,22 +798,27 @@ export default function StackScreen() {
         onDismiss={() => setNoSwapCandidates(false)}
       />
 
-      <PlayerPickerDialog
-        visible={!!crossSwapDialog}
-        candidates={crossSwapDialog?.candidates ?? []}
-        getPlayerName={getPlayerName}
-        onSelect={(candidateId: string) => {
-          if (!crossSwapDialog) return;
-          swapPlayersBetweenStacks(
-            crossSwapDialog.fromStackId,
-            crossSwapDialog.movingId,
-            crossSwapDialog.toStackId,
-            candidateId,
-          );
-          setCrossSwapDialog(null);
-        }}
-        onDismiss={() => setCrossSwapDialog(null)}
+      <AlertDialog
+        visible={!!lockedOutsideQuorum}
+        title="Locked Pairing"
+        message={
+          lockedOutsideQuorum
+            ?.map(
+              (c) =>
+                `${c.playerName} is currently lock-paired with ${c.partnerName}. Remove the lock-pairing before including ${c.playerName} in a quorum.`,
+            )
+            .join("\n\n") ?? ""
+        }
+        onDismiss={() => setLockedOutsideQuorum(null)}
       />
+
+      <AlertDialog
+        visible={quorumMemberConflict}
+        title="Player in Another Quorum"
+        message="One or more players in this stack already belong to another quorum."
+        onDismiss={() => setQuorumMemberConflict(false)}
+      />
+
     </View>
   );
 }

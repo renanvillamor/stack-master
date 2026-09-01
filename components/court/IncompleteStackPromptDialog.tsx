@@ -33,6 +33,7 @@ export default function IncompleteStackPromptDialog({
       <Dialog
         visible={!!court && !!stack}
         onDismiss={onDismiss}
+        testID="incomplete-stack-prompt"
         style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
       >
         <View
@@ -85,6 +86,7 @@ export default function IncompleteStackPromptDialog({
               mode="contained"
               onPress={onMoveAvailableInstead}
               icon="map-marker-plus-outline"
+              testID="incomplete-stack-prompt-move-available"
             >
               Move Next Available Stack
             </Button>
@@ -92,6 +94,7 @@ export default function IncompleteStackPromptDialog({
               mode="outlined"
               onPress={onCompleteStack}
               icon="account-plus-outline"
+              testID="incomplete-stack-prompt-complete"
             >
               Complete This Stack
             </Button>

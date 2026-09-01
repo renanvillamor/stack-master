@@ -1,10 +1,13 @@
+import ImportReclubSheet, {
+  ImportReclubSheetRef,
+} from "@/components/player/ImportReclubSheet";
 import TeamManagementModal from "@/components/team/TeamManagementModal";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { useTeamStore } from "@/store/teamStore";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import {
   Button,
@@ -38,6 +41,7 @@ export default function SettingsScreen() {
   const { members: teamMembers } = useTeamStore();
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [teamManagementVisible, setTeamManagementVisible] = useState(false);
+  const importReclubSheetRef = useRef<ImportReclubSheetRef>(null);
 
   const activeTeamMembers = teamMembers.filter((m) => m.active);
 
@@ -113,9 +117,9 @@ export default function SettingsScreen() {
                       setLandscapeColumns(Number(v) as 1 | 2 | 3)
                     }
                     buttons={[
-                      { value: "1", label: "1" },
-                      { value: "2", label: "2" },
-                      { value: "3", label: "3" },
+                      { value: "1", label: "1", testID: "settings-columns-1" },
+                      { value: "2", label: "2", testID: "settings-columns-2" },
+                      { value: "3", label: "3", testID: "settings-columns-3" },
                     ]}
                   />
                 </View>
@@ -168,6 +172,7 @@ export default function SettingsScreen() {
                   value={multiGroupStack}
                   onValueChange={toggleMultiGroupStack}
                   color={theme.colors.primary}
+                  testID="settings-multigroup-switch"
                 />
               </View>
             </View>
@@ -189,6 +194,7 @@ export default function SettingsScreen() {
                     value={autoStackPlayers}
                     onValueChange={toggleAutoStackPlayers}
                     color={theme.colors.primary}
+                    testID="settings-autostack-switch"
                   />
                 )}
               />
@@ -215,6 +221,7 @@ export default function SettingsScreen() {
                     value={shufflePlayers}
                     onValueChange={toggleShufflePlayers}
                     color={theme.colors.primary}
+                    testID="settings-shuffle-switch"
                   />
                 )}
               />
@@ -250,6 +257,7 @@ export default function SettingsScreen() {
                   />
                 )}
                 onPress={() => setTeamManagementVisible(true)}
+                testID="settings-team-management"
               />
               <View
                 style={{
@@ -271,8 +279,23 @@ export default function SettingsScreen() {
                   />
                 )}
                 onPress={() => setConfirmVisible(true)}
+                testID="settings-new-session"
               />
             </View>
+            <Divider />
+            <List.Item
+              title="Import from Reclub"
+              description="Add players from a pasted Reclub participant list"
+              left={(props) => (
+                <List.Icon
+                  {...props}
+                  icon="content-paste"
+                  color={theme.colors.primary}
+                />
+              )}
+              onPress={() => importReclubSheetRef.current?.present()}
+              testID="settings-import-reclub"
+            />
           </Card>
 
           {/* About */}
@@ -333,10 +356,13 @@ export default function SettingsScreen() {
         onDismiss={() => setTeamManagementVisible(false)}
       />
 
+      <ImportReclubSheet ref={importReclubSheetRef} />
+
       <Portal>
         <Dialog
           visible={confirmVisible}
           onDismiss={() => setConfirmVisible(false)}
+          testID="settings-new-session-dialog"
         >
           <Dialog.Icon icon="restart-alert" color={theme.colors.error} />
           <Dialog.Title style={{ textAlign: "center" }}>
@@ -358,8 +384,17 @@ export default function SettingsScreen() {
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setConfirmVisible(false)}>Cancel</Button>
-            <Button textColor={theme.colors.error} onPress={handleNewSession}>
+            <Button
+              onPress={() => setConfirmVisible(false)}
+              testID="settings-new-session-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              textColor={theme.colors.error}
+              onPress={handleNewSession}
+              testID="settings-new-session-confirm"
+            >
               Clear All
             </Button>
           </Dialog.Actions>

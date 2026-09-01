@@ -58,6 +58,7 @@ export default function PlayerStandingsDialog({
       <Dialog
         visible={visible}
         onDismiss={onDismiss}
+        testID="player-standings-dialog"
         style={{
           maxHeight: "85%",
           overflow: "hidden",
@@ -93,6 +94,7 @@ export default function PlayerStandingsDialog({
             size={20}
             color="rgba(255,255,255,0.8)"
             onPress={onDismiss}
+            testID="player-standings-close"
           />
         </View>
 

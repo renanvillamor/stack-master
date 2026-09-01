@@ -24,6 +24,7 @@ export interface ActionItem {
   value?: boolean;
   onValueChange?: (value: boolean) => void;
   disabled?: boolean;
+  testID?: string;
 }
 
 export interface ActionBottomSheetRef {
@@ -93,6 +94,7 @@ const ActionBottomSheet = forwardRef<
         {actions.map((item, index) => (
           <TouchableOpacity
             key={index}
+            testID={item.testID}
             onPress={() => {
               if (item.disabled) return;
               if (item.type === "switch") {

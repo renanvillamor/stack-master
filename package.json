@@ -9,7 +9,10 @@
     "android:apk-release": "node scripts/build-local-android.js release",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.8",
@@ -40,6 +43,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/react": "~19.2.2",
     "patch-package": "^8.0.1",
     "typescript": "~5.9.2"

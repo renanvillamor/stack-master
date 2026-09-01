@@ -63,6 +63,7 @@ function PlayerRow({
     <TouchableRipple
       onPress={onPress}
       borderless
+      testID={`court-card-player-${player.id}`}
       style={{ borderRadius: 8 }}
       rippleColor={accentColor + "30"}
     >
@@ -185,6 +186,7 @@ export default function CourtCard({
   return (
     <Card
       mode="elevated"
+      testID={`court-card-${court.id}`}
       style={{
         borderLeftWidth: 4,
         borderLeftColor: hasGame
@@ -233,6 +235,7 @@ export default function CourtCard({
               size={20}
               iconColor={theme.colors.onSurfaceVariant}
               onPress={onMorePress}
+              testID={`court-card-menu-${court.id}`}
               style={{ margin: 0 }}
             />
           </View>
@@ -371,6 +374,7 @@ export default function CourtCard({
           icon="flag-checkered"
           onPress={onDone}
           disabled={!onDone}
+          testID={`court-card-end-game-${court.id}`}
           style={{ marginTop: 12 }}
         >
           END GAME

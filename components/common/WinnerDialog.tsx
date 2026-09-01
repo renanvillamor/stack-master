@@ -205,6 +205,7 @@ export default function WinnerDialog({
             }}
           >
             <Button
+              testID="winner-dialog-team1"
               mode="contained"
               icon="trophy"
               onPress={() => onSelectWinner(1)}
@@ -213,6 +214,7 @@ export default function WinnerDialog({
               Team 1 Won
             </Button>
             <Button
+              testID="winner-dialog-team2"
               mode="contained"
               icon="trophy"
               onPress={() => onSelectWinner(2)}

@@ -33,7 +33,9 @@ export default function AlertDialog({
           <Text variant="bodyMedium">{message}</Text>
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onPress={onDismiss}>{dismissLabel}</Button>
+          <Button testID="alert-dialog-ok" onPress={onDismiss}>
+            {dismissLabel}
+          </Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>

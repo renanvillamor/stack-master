@@ -10,6 +10,7 @@ import {
   Icon,
   Portal,
   Text,
+  TouchableRipple,
   useTheme,
 } from "react-native-paper";
 
@@ -17,9 +18,22 @@ interface MoveToStackDialogProps {
   visible: boolean;
   queuedStacks: Stack[];
   fromStackId: string | null;
+  /** Name of the player being moved, shown in the dialog title for context. */
+  movingPlayerName?: string;
+  /**
+   * True when the player being moved is bringing a locked partner along
+   * (see stackStore.movePlayerBetweenStacks) — the store seats the pair as
+   * a unit and aborts if there's no room, so target selection stays a
+   * whole-card tap rather than picking an individual player to swap with.
+   */
+  pairedMove?: boolean;
   getPlayerName: (id: string) => string;
   getPlayerRating: (id: string) => PlayerRating;
+  isPlayerLocked?: (id: string) => boolean;
+  /** Whole-card tap: moves the player directly into a stack with room (or a paired move). */
   onSelectStack: (stackId: string) => void;
+  /** Tapping a specific occupied, unlocked player in a full stack: swap the moving player in for that player. */
+  onSelectSwapTarget: (stackId: string, targetPlayerId: string) => void;
   /** Moves the player into a brand-new stack instead of an existing one. */
   onCreateNewStack: () => void;
   onDismiss: () => void;
@@ -37,11 +51,18 @@ function PlayerRow({
   accentColor,
   getPlayerName,
   getPlayerRating,
+  isLocked,
+  onPress,
+  testID,
 }: {
   playerId?: string;
   accentColor: string;
   getPlayerName: (id: string) => string;
   getPlayerRating: (id: string) => PlayerRating;
+  isLocked?: boolean;
+  /** Present only when this row is a valid swap target (occupied, unlocked, target stack full). */
+  onPress?: () => void;
+  testID?: string;
 }) {
   const theme = useTheme();
 
@@ -76,7 +97,7 @@ function PlayerRow({
   }
 
   const rating = getPlayerRating(playerId);
-  return (
+  const content = (
     <View
       style={{
         flexDirection: "row",
@@ -84,6 +105,7 @@ function PlayerRow({
         gap: 8,
         paddingVertical: 2,
         paddingHorizontal: 2,
+        opacity: isLocked && !onPress ? 0.5 : 1,
       }}
     >
       <View
@@ -121,7 +143,24 @@ function PlayerRow({
           {formatRating(rating)}
         </Text>
       </View>
+      {isLocked ? (
+        <Icon source="lock" size={13} color={theme.colors.onSurfaceVariant} />
+      ) : null}
     </View>
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <TouchableRipple
+      onPress={onPress}
+      borderless
+      style={{ borderRadius: 8 }}
+      rippleColor={accentColor + "30"}
+      testID={testID}
+    >
+      {content}
+    </TouchableRipple>
   );
 }
 
@@ -129,9 +168,13 @@ export default function MoveToStackDialog({
   visible,
   queuedStacks,
   fromStackId,
+  movingPlayerName,
+  pairedMove = false,
   getPlayerName,
   getPlayerRating,
+  isPlayerLocked,
   onSelectStack,
+  onSelectSwapTarget,
   onCreateNewStack,
   onDismiss,
 }: MoveToStackDialogProps) {
@@ -151,9 +194,12 @@ export default function MoveToStackDialog({
       <Dialog
         visible={visible}
         onDismiss={onDismiss}
+        testID="move-to-stack-dialog"
         style={isLandscape ? { alignSelf: "center", width: "80%" } : undefined}
       >
-        <Dialog.Title>Move Player to Stack</Dialog.Title>
+        <Dialog.Title>
+          {movingPlayerName ? `Move ${movingPlayerName} to Stack` : "Move Player to Stack"}
+        </Dialog.Title>
         <Dialog.ScrollArea style={{ paddingHorizontal: 0, maxHeight: "80%" }}>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
             {targetStacks.length === 0 ? (
@@ -183,12 +229,24 @@ export default function MoveToStackDialog({
                   const total =
                     s.team1.playerIds.length + s.team2.playerIds.length;
                   const isFull = total === 4;
+                  // A full, non-paired move has no open seat to land in — the
+                  // user must tap the specific player to swap with instead of
+                  // the whole card.
+                  const requiresSwapPick = isFull && !pairedMove;
+                  const swapRowProps = (playerId?: string) =>
+                    requiresSwapPick && playerId && !isPlayerLocked?.(playerId)
+                      ? {
+                          onPress: () => onSelectSwapTarget(s.id, playerId),
+                          testID: `move-to-stack-player-${playerId}`,
+                        }
+                      : {};
 
                   return (
                     <Card
                       key={s.id}
                       mode="elevated"
-                      onPress={() => onSelectStack(s.id)}
+                      onPress={requiresSwapPick ? undefined : () => onSelectStack(s.id)}
+                      testID={`move-to-stack-item-${s.id}`}
                       style={{
                         width: cardWidth,
                         borderLeftWidth: 4,
@@ -277,6 +335,19 @@ export default function MoveToStackDialog({
                           )}
                         </View>
 
+                        {requiresSwapPick && (
+                          <Text
+                            variant="labelSmall"
+                            style={{
+                              color: theme.colors.onSurfaceVariant,
+                              marginBottom: 8,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Tap a player below to swap places
+                          </Text>
+                        )}
+
                         {/* Teams */}
                         <View style={{ flexDirection: "row", gap: 8 }}>
                           {/* Team 1 */}
@@ -305,12 +376,24 @@ export default function MoveToStackDialog({
                               accentColor={TEAM1_COLOR}
                               getPlayerName={getPlayerName}
                               getPlayerRating={getPlayerRating}
+                              isLocked={
+                                s.team1.playerIds[0]
+                                  ? isPlayerLocked?.(s.team1.playerIds[0])
+                                  : false
+                              }
+                              {...swapRowProps(s.team1.playerIds[0])}
                             />
                             <PlayerRow
                               playerId={s.team1.playerIds[1]}
                               accentColor={TEAM1_COLOR}
                               getPlayerName={getPlayerName}
                               getPlayerRating={getPlayerRating}
+                              isLocked={
+                                s.team1.playerIds[1]
+                                  ? isPlayerLocked?.(s.team1.playerIds[1])
+                                  : false
+                              }
+                              {...swapRowProps(s.team1.playerIds[1])}
                             />
                           </View>
 
@@ -381,12 +464,24 @@ export default function MoveToStackDialog({
                               accentColor={TEAM2_COLOR}
                               getPlayerName={getPlayerName}
                               getPlayerRating={getPlayerRating}
+                              isLocked={
+                                s.team2.playerIds[0]
+                                  ? isPlayerLocked?.(s.team2.playerIds[0])
+                                  : false
+                              }
+                              {...swapRowProps(s.team2.playerIds[0])}
                             />
                             <PlayerRow
                               playerId={s.team2.playerIds[1]}
                               accentColor={TEAM2_COLOR}
                               getPlayerName={getPlayerName}
                               getPlayerRating={getPlayerRating}
+                              isLocked={
+                                s.team2.playerIds[1]
+                                  ? isPlayerLocked?.(s.team2.playerIds[1])
+                                  : false
+                              }
+                              {...swapRowProps(s.team2.playerIds[1])}
                             />
                           </View>
                         </View>
@@ -399,8 +494,8 @@ export default function MoveToStackDialog({
           </ScrollView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
-          <Button onPress={onCreateNewStack}>New Stack</Button>
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onCreateNewStack} testID="move-to-stack-new">New Stack</Button>
+          <Button onPress={onDismiss} testID="move-to-stack-cancel">Cancel</Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>

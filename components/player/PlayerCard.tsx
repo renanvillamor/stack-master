@@ -10,6 +10,8 @@ interface PlayerCardProps {
   selectionMode?: boolean;
   /** Name of the player this player is lock-paired with, if any. */
   lockedPartnerName?: string | null;
+  /** True when this player belongs to an active quorum. */
+  inQuorum?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
 }
@@ -32,6 +34,7 @@ export default function PlayerCard({
   selected = false,
   selectionMode = false,
   lockedPartnerName,
+  inQuorum = false,
   onPress,
   onLongPress,
 }: PlayerCardProps) {
@@ -51,6 +54,7 @@ export default function PlayerCard({
       mode="elevated"
       onPress={onPress}
       onLongPress={onLongPress}
+      testID={`player-card-${player.id}`}
       style={{
         borderRadius: 14,
         borderLeftWidth: 4,
@@ -117,6 +121,13 @@ export default function PlayerCard({
             </View>
             {lockedPartnerName ? (
               <Icon source="lock" size={14} color={theme.colors.primary} />
+            ) : null}
+            {inQuorum ? (
+              <Icon
+                source="account-group"
+                size={14}
+                color={theme.colors.tertiary}
+              />
             ) : null}
             <Chip
               compact

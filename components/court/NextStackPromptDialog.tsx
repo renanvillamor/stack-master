@@ -83,6 +83,7 @@ export default function NextStackPromptDialog({
       <Dialog
         visible={!!court && !!stack}
         onDismiss={onDismiss}
+        testID="next-stack-prompt"
         style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
       >
         {/* Header */}
@@ -195,10 +196,21 @@ export default function NextStackPromptDialog({
 
         <Dialog.Actions>
           <View style={{ flexDirection: "row", gap: 8, flex: 1 }}>
-            <Button mode="outlined" onPress={onDismiss} style={{ flex: 1 }}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              testID="next-stack-prompt-dismiss"
+              style={{ flex: 1 }}
+            >
               Not Now
             </Button>
-            <Button mode="contained" onPress={onConfirm} style={{ flex: 1 }} icon="map-marker-plus-outline">
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              testID="next-stack-prompt-confirm"
+              style={{ flex: 1 }}
+              icon="map-marker-plus-outline"
+            >
               Move to Court
             </Button>
           </View>

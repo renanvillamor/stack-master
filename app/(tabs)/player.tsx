@@ -12,10 +12,12 @@ import PlayerFormModal from "@/components/player/PlayerFormModal";
 import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
 import PlayerStandingsDialog from "@/components/player/PlayerStandingsDialog";
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Player, PlayerStatus } from "@/types";
 import { getPlayerGroup, getStackGroup } from "@/utils/groupQueue";
+import { findLockedOutsideQuorum, tryConsolidateQuorum } from "@/utils/quorum";
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import {
@@ -39,6 +41,8 @@ export default function PlayerScreen() {
     addPlayersToSpecificStack,
     addManyPlayersToQueue,
   } = useStackStore();
+  const { quorums, createQuorum, removeQuorum, removeQuorumForPlayer } =
+    useQuorumStore();
   const { landscapeColumns, multiGroupStack } = useSettingsStore();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -54,6 +58,13 @@ export default function PlayerScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   const [lockGroupMismatch, setLockGroupMismatch] = useState(false);
+  const [lockQuorumConflict, setLockQuorumConflict] = useState(false);
+  const [lockedOutsideQuorum, setLockedOutsideQuorum] = useState<
+    { playerId: string; playerName: string; partnerName: string }[] | null
+  >(null);
+  const [removeQuorumTarget, setRemoveQuorumTarget] = useState<string | null>(
+    null,
+  );
   const [stackPickerTarget, setStackPickerTarget] = useState<string[] | null>(
     null,
   );
@@ -195,6 +206,7 @@ export default function PlayerScreen() {
   const confirmDelete = () => {
     if (deleteTarget) {
       removePlayer(deleteTarget);
+      removeQuorumForPlayer(deleteTarget);
       setDeleteTarget(null);
     }
   };
@@ -204,6 +216,9 @@ export default function PlayerScreen() {
 
   const getPlayerRatingById = (id: string) =>
     players.find((p) => p.id === id)?.rating ?? "NR";
+
+  const getQuorumForPlayer = (id: string) =>
+    quorums.find((q) => q.playerIds.includes(id));
 
   /**
    * Unassigned stacks (any type) that have room for `count` more players.
@@ -303,7 +318,10 @@ export default function PlayerScreen() {
   };
 
   const confirmBulkDelete = () => {
-    selectedIds.forEach((id) => removePlayer(id));
+    selectedIds.forEach((id) => {
+      removePlayer(id);
+      removeQuorumForPlayer(id);
+    });
     clearSelection();
     setPendingBulkDelete(false);
   };
@@ -311,6 +329,11 @@ export default function PlayerScreen() {
   const handleLockSelectedPair = () => {
     const [idA, idB] = Array.from(selectedIds);
     if (!idA || !idB) return;
+
+    if (getQuorumForPlayer(idA) || getQuorumForPlayer(idB)) {
+      setLockQuorumConflict(true);
+      return;
+    }
 
     if (multiGroupStack) {
       const playerA = players.find((p) => p.id === idA);
@@ -343,6 +366,27 @@ export default function PlayerScreen() {
       return players.find((p) => p.id === idA)?.lockedPartnerId === idB;
     })();
 
+  const handleCreateQuorum = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length !== 4) return;
+
+    const conflicts = findLockedOutsideQuorum(ids, players);
+    if (conflicts.length > 0) {
+      setLockedOutsideQuorum(conflicts);
+      return;
+    }
+
+    const quorumId = createQuorum(ids);
+    tryConsolidateQuorum(quorumId);
+    clearSelection();
+  };
+
+  const handleRemoveFromQuorum = () => {
+    if (!selectedPlayer) return;
+    const quorum = getQuorumForPlayer(selectedPlayer.id);
+    if (quorum) setRemoveQuorumTarget(quorum.id);
+  };
+
   const lockedPartnerName = selectedPlayer?.lockedPartnerId
     ? getPlayerName(selectedPlayer.lockedPartnerId)
     : null;
@@ -351,6 +395,7 @@ export default function PlayerScreen() {
     {
       label: "Edit",
       icon: "pencil-outline",
+      testID: "player-action-edit",
       onPress: () => {
         setEditingPlayer(selectedPlayer);
         setModalVisible(true);
@@ -359,6 +404,7 @@ export default function PlayerScreen() {
     {
       label: "Match History",
       icon: "history",
+      testID: "player-action-history",
       onPress: () => setHistoryPlayer(selectedPlayer),
     },
     {
@@ -370,6 +416,7 @@ export default function PlayerScreen() {
       disabled:
         selectedPlayer?.status === "Stacked" ||
         selectedPlayer?.status === "Playing",
+      testID: "player-action-idle",
     },
     // Only allow adding to stack when player is Available
     ...(selectedPlayer?.status === "Available"
@@ -377,6 +424,7 @@ export default function PlayerScreen() {
           {
             label: "Add to Stack",
             icon: "layers-plus",
+            testID: "player-action-add-to-stack",
             onPress: () => {
               if (selectedPlayer) {
                 handleAddToStack(selectedPlayer.id);
@@ -390,9 +438,20 @@ export default function PlayerScreen() {
           {
             label: `Unlock Pairing (${lockedPartnerName})`,
             icon: "lock-open-variant-outline",
+            testID: "player-action-unlock",
             onPress: () => {
               if (selectedPlayer) unlockPlayer(selectedPlayer.id);
             },
+          } as ActionItem,
+        ]
+      : []),
+    ...(selectedPlayer && getQuorumForPlayer(selectedPlayer.id)
+      ? [
+          {
+            label: "Remove from Quorum",
+            icon: "account-group-outline",
+            testID: "player-action-remove-quorum",
+            onPress: handleRemoveFromQuorum,
           } as ActionItem,
         ]
       : []),
@@ -400,6 +459,7 @@ export default function PlayerScreen() {
       label: "Delete",
       icon: "delete-outline",
       destructive: true,
+      testID: "player-action-delete",
       onPress: () => setDeleteTarget(selectedPlayer?.id ?? null),
     },
   ];
@@ -425,12 +485,14 @@ export default function PlayerScreen() {
       value: bulkIdleValue,
       onValueChange: handleBulkIdleToggle,
       disabled: !bulkIdleEnabled,
+      testID: "player-bulk-action-idle",
     },
     ...(availableSelectedCount > 0
       ? [
           {
             label: `Add to Stack (${availableSelectedCount})`,
             icon: "layers-plus",
+            testID: "player-bulk-action-add-to-stack",
             onPress: handleBulkAddToStack,
           } as ActionItem,
         ]
@@ -441,19 +503,33 @@ export default function PlayerScreen() {
             ? ({
                 label: "Unlock Pair",
                 icon: "lock-open-variant-outline",
+                testID: "player-bulk-action-unlock-pair",
                 onPress: handleUnlockSelectedPair,
               } as ActionItem)
             : ({
                 label: "Lock Pair",
                 icon: "lock-outline",
+                testID: "player-bulk-action-lock-pair",
                 onPress: handleLockSelectedPair,
               } as ActionItem),
+        ]
+      : []),
+    ...(selectedIds.size === 4 &&
+    Array.from(selectedIds).every((id) => !getQuorumForPlayer(id))
+      ? [
+          {
+            label: "Create Quorum",
+            icon: "account-group-outline",
+            testID: "player-bulk-action-create-quorum",
+            onPress: handleCreateQuorum,
+          } as ActionItem,
         ]
       : []),
     {
       label: "Delete",
       icon: "delete-outline",
       destructive: true,
+      testID: "player-bulk-action-delete",
       onPress: () => setPendingBulkDelete(true),
     },
   ];
@@ -488,6 +564,7 @@ export default function PlayerScreen() {
             size={20}
             onPress={clearSelection}
             iconColor={theme.colors.onPrimaryContainer}
+            testID="player-selection-close"
           />
           <Text
             variant="titleSmall"
@@ -506,12 +583,14 @@ export default function PlayerScreen() {
             size={20}
             onPress={selectAll}
             iconColor={theme.colors.onPrimaryContainer}
+            testID="player-selection-toggle-all"
           />
           <IconButton
             icon="account-cog-outline"
             size={20}
             onPress={() => bulkSheetRef.current?.present()}
             iconColor={theme.colors.onPrimaryContainer}
+            testID="player-selection-manage"
           />
         </View>
       ) : null}
@@ -532,6 +611,7 @@ export default function PlayerScreen() {
           onChangeText={setSearchQuery}
           style={{ flex: 1, height: 44 }}
           inputStyle={{ fontSize: 14, minHeight: 0 }}
+          testID="player-search"
         />
         <View style={{ position: "relative" }}>
           <IconButton
@@ -549,6 +629,7 @@ export default function PlayerScreen() {
                   ? theme.colors.primaryContainer
                   : undefined,
             }}
+            testID="player-filter-button"
           />
           {statusFilter !== "All" && (
             <View
@@ -573,6 +654,7 @@ export default function PlayerScreen() {
               ? theme.colors.primary
               : theme.colors.onSurfaceVariant
           }
+          testID="player-sort-button"
         />
         <IconButton
           icon="trophy"
@@ -580,6 +662,7 @@ export default function PlayerScreen() {
           onPress={() => setStandingsVisible(true)}
           iconColor="#FFD700"
           style={{ backgroundColor: "#FFD70020" }}
+          testID="player-standings-button"
         />
       </View>
 
@@ -603,6 +686,7 @@ export default function PlayerScreen() {
                     ? getPlayerName(item.lockedPartnerId)
                     : null
                 }
+                inQuorum={!!getQuorumForPlayer(item.id)}
                 onPress={() => handleCardPress(item.id, item)}
                 onLongPress={() => handleCardLongPress(item.id)}
               />
@@ -672,6 +756,7 @@ export default function PlayerScreen() {
         icon="plus"
         onPress={handleAdd}
         style={{ position: "absolute", bottom: 24, right: 24 }}
+        testID="player-add-fab"
       />
 
       <PlayerFormModal
@@ -703,6 +788,39 @@ export default function PlayerScreen() {
         onDismiss={() => setLockGroupMismatch(false)}
       />
 
+      <AlertDialog
+        visible={lockQuorumConflict}
+        title="Player in a Quorum"
+        message="One of the selected players already belongs to a quorum. Remove them from the quorum before locking a pairing."
+        onDismiss={() => setLockQuorumConflict(false)}
+      />
+
+      <AlertDialog
+        visible={!!lockedOutsideQuorum}
+        title="Locked Pairing"
+        message={
+          lockedOutsideQuorum
+            ?.map(
+              (c) =>
+                `${c.playerName} is currently lock-paired with ${c.partnerName}. Remove the lock-pairing before including ${c.playerName} in a quorum.`,
+            )
+            .join("\n\n") ?? ""
+        }
+        onDismiss={() => setLockedOutsideQuorum(null)}
+      />
+
+      <ConfirmDialog
+        visible={!!removeQuorumTarget}
+        title="Remove Quorum"
+        message="This will remove the quorum for all 4 players. Continue?"
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (removeQuorumTarget) removeQuorum(removeQuorumTarget);
+          setRemoveQuorumTarget(null);
+        }}
+        onDismiss={() => setRemoveQuorumTarget(null)}
+      />
+
       <ActionBottomSheet
         ref={sheetRef}
         title={selectedPlayer?.name}
@@ -730,6 +848,7 @@ export default function PlayerScreen() {
       <OptionPickerSheet
         ref={filterSheetRef}
         title="Filter by Status"
+        testIDPrefix="status-filter"
         options={[
           { value: "All", label: "All Players", icon: "account-group-outline" },
           {
@@ -749,6 +868,7 @@ export default function PlayerScreen() {
       <OptionPickerSheet
         ref={sortSheetRef}
         title="Sort by"
+        testIDPrefix="sort-by"
         options={[
           { value: "name", label: "Name", icon: "sort-alphabetical-ascending" },
           { value: "lastPlayed", label: "Last Played", icon: "clock-outline" },
@@ -764,6 +884,7 @@ export default function PlayerScreen() {
           visible={!!stackPickerTarget}
           onDismiss={() => setStackPickerTarget(null)}
           style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
+          testID="player-stack-picker-dialog"
         >
           <Dialog.Title>Add to Stack</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
@@ -790,6 +911,7 @@ export default function PlayerScreen() {
                   onPress={() => handlePickStack(stack.id)}
                   borderless
                   style={{ borderRadius: 10 }}
+                  testID={`player-stack-picker-item-${stack.id}`}
                 >
                   <View
                     style={{
@@ -817,8 +939,18 @@ export default function PlayerScreen() {
             })}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setStackPickerTarget(null)}>Cancel</Button>
-            <Button onPress={handlePickNewStack}>New Stack</Button>
+            <Button
+              onPress={() => setStackPickerTarget(null)}
+              testID="player-stack-picker-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onPress={handlePickNewStack}
+              testID="player-stack-picker-new"
+            >
+              New Stack
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

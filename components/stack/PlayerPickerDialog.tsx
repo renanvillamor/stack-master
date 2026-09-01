@@ -39,6 +39,7 @@ export default function PlayerPickerDialog({
       <Dialog
         visible={visible}
         onDismiss={onDismiss}
+        testID="player-picker-dialog"
         style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
       >
         <Dialog.Title>Select Player to Swap With</Dialog.Title>
@@ -50,6 +51,7 @@ export default function PlayerPickerDialog({
                   key={id}
                   onPress={() => onSelect(id)}
                   borderless
+                  testID={`player-picker-item-${id}`}
                   style={{ borderRadius: 10, width: cardWidth }}
                 >
                   <View
@@ -92,7 +94,9 @@ export default function PlayerPickerDialog({
           </ScrollView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onDismiss} testID="player-picker-cancel">
+            Cancel
+          </Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>

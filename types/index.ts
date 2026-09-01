@@ -72,3 +72,14 @@ export interface Settings {
   autoStackPlayers: boolean;
   multiGroupStack: boolean;
 }
+
+// ─── Quorum ──────────────────────────────────────────────────────────────────
+
+export interface Quorum {
+  id: string;
+  /** Exactly 4 player ids, fixed at creation. */
+  playerIds: string[];
+  /** The stack currently holding all 4 members together, or null while still waiting on someone. */
+  stackId: string | null;
+  createdAt: string;
+}

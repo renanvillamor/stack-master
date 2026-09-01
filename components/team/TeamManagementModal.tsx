@@ -73,12 +73,14 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
         setEditingMember(selectedMember);
         setFormVisible(true);
       },
+      testID: "team-member-action-edit",
     },
     {
       label: "Delete",
       icon: "delete-outline",
       destructive: true,
       onPress: () => setDeleteTarget(selectedMember?.id ?? null),
+      testID: "team-member-action-delete",
     },
   ];
 
@@ -93,6 +95,7 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
           borderRadius: 16,
           overflow: "hidden",
         }}
+        testID="team-management-modal"
       >
         {/* Header */}
         <View
@@ -117,12 +120,14 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
               onSubmitEditing={handleSaveName}
               returnKeyType="done"
               style={{ flex: 1, backgroundColor: "transparent" }}
+              testID="team-name-input"
             />
           ) : (
             <TouchableRipple
               onPress={startEditName}
               borderless
               style={{ flex: 1, borderRadius: 4, paddingVertical: 6 }}
+              testID="team-name-display"
             >
               <Text variant="titleLarge">{teamName}</Text>
             </TouchableRipple>
@@ -134,8 +139,14 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
               setEditingMember(null);
               setFormVisible(true);
             }}
+            testID="team-add-member"
           />
-          <IconButton icon="close" size={22} onPress={onDismiss} />
+          <IconButton
+            icon="close"
+            size={22}
+            onPress={onDismiss}
+            testID="team-management-close"
+          />
         </View>
 
         <Text
@@ -180,6 +191,7 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
                 <TouchableRipple
                   onPress={() => handleMemberPress(item)}
                   style={{ opacity: item.active ? 1 : 0.45 }}
+                  testID={`team-member-${item.id}`}
                 >
                   <View
                     style={{
@@ -210,6 +222,7 @@ export default function TeamManagementModal({ visible, onDismiss }: Props) {
                       value={item.active}
                       onValueChange={() => toggleMemberActive(item.id)}
                       color={theme.colors.primary}
+                      testID={`team-member-active-${item.id}`}
                     />
                   </View>
                 </TouchableRipple>

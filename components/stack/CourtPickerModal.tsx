@@ -32,6 +32,7 @@ export default function CourtPickerModal({
       <Dialog
         visible={visible}
         onDismiss={onDismiss}
+        testID="court-picker-dialog"
         style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
       >
         <Dialog.Title>Move to Court</Dialog.Title>
@@ -56,6 +57,7 @@ export default function CourtPickerModal({
                     onSelect(court.id);
                     onDismiss();
                   }}
+                  testID={`court-picker-item-${court.id}`}
                   style={{ paddingVertical: 14, paddingHorizontal: 24 }}
                 >
                   <Text
@@ -71,7 +73,9 @@ export default function CourtPickerModal({
         </Dialog.Content>
 
         <Dialog.Actions>
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onDismiss} testID="court-picker-cancel">
+            Cancel
+          </Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>

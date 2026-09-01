@@ -68,6 +68,7 @@ export default function PlayerFormModal({
       <Modal
         visible={visible}
         onDismiss={onDismiss}
+        testID="player-form-modal"
         contentContainerStyle={{
           backgroundColor: theme.colors.surface,
           margin: 24,
@@ -90,6 +91,7 @@ export default function PlayerFormModal({
           style={{ marginBottom: 16 }}
           onSubmitEditing={handleSubmit}
           returnKeyType="done"
+          testID="player-form-name-input"
         />
 
         <Text
@@ -113,6 +115,7 @@ export default function PlayerFormModal({
               <Chip
                 key={formatRating(option)}
                 onPress={() => setRating(option)}
+                testID={`player-form-rating-${formatRating(option)}`}
                 style={{
                   backgroundColor: selected
                     ? theme.colors.primary
@@ -133,11 +136,14 @@ export default function PlayerFormModal({
         </View>
 
         <View className="flex-row justify-end gap-2">
-          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={onDismiss} testID="player-form-cancel">
+            Cancel
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
             disabled={!name.trim()}
+            testID="player-form-submit"
           >
             {player ? "Save" : "Add"}
           </Button>

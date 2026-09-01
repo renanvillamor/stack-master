@@ -110,6 +110,7 @@ export default function PlayerMatchHistoryDialog({
         visible={!!player}
         onDismiss={onDismiss}
         style={isLandscape ? { alignSelf: "center", width: "50%" } : undefined}
+        testID="player-history-dialog"
       >
         <Dialog.Title>{player.name}</Dialog.Title>
 
@@ -221,7 +222,9 @@ export default function PlayerMatchHistoryDialog({
         </Dialog.Content>
 
         <Dialog.Actions>
-          <Button onPress={onDismiss}>Close</Button>
+          <Button onPress={onDismiss} testID="player-history-close">
+            Close
+          </Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>

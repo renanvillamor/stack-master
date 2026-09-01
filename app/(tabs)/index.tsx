@@ -13,9 +13,11 @@ import CourtPickerModal from "@/components/stack/CourtPickerModal";
 import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Court, Stack } from "@/types";
+import { checkQuorumsForPlayers } from "@/utils/quorum";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
@@ -40,6 +42,7 @@ export default function CourtScreen() {
     swapPlayersBetweenTeams,
   } = useStackStore();
   const { players, updatePlayerStatus, recordGameResult } = usePlayerStore();
+  const { getQuorumForStack, removeQuorum } = useQuorumStore();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
@@ -165,6 +168,12 @@ export default function CourtScreen() {
       ),
     );
 
+    // A quorum expires after its one game — dissolve it before routing
+    // these players individually, and before checking whether any of them
+    // (or their now-freed teammates) belong to a still-pending quorum.
+    const finishedQuorum = getQuorumForStack(stack.id);
+    if (finishedQuorum) removeQuorum(finishedQuorum.id);
+
     if (autoStackPlayers) {
       allIds.forEach((id) => updatePlayerStatus(id, "Stacked"));
       // Single atomic action: removes the game stack and re-queues players.
@@ -183,6 +192,7 @@ export default function CourtScreen() {
       useStackStore.getState().removeStack(stack.id);
     }
 
+    checkQuorumsForPlayers(allIds);
     triggerNextStackCheck();
   };
 
@@ -243,6 +253,7 @@ export default function CourtScreen() {
       icon: "swap-horizontal",
       onPress: handleChangeTeam,
       disabled: !!playerTarget && isPlayerLocked(playerTarget.playerId),
+      testID: "court-action-switch-team",
     },
   ];
 
@@ -278,6 +289,7 @@ export default function CourtScreen() {
         setEditingCourt(selectedCourt);
         setModalVisible(true);
       },
+      testID: "court-action-edit",
     },
     ...(selectedCourt && getActiveStack(selectedCourt.id)
       ? [
@@ -285,6 +297,7 @@ export default function CourtScreen() {
             label: "Move to Court",
             icon: "swap-horizontal",
             onPress: () => setMoveGroupPickerVisible(true),
+            testID: "court-action-move-to-court",
           } as ActionItem,
           {
             label: "Back to Stack",
@@ -295,11 +308,15 @@ export default function CourtScreen() {
                 : null;
               if (stack) {
                 returnStackToQueue(stack.id);
-                [...stack.team1.playerIds, ...stack.team2.playerIds].forEach(
-                  (id) => updatePlayerStatus(id, "Stacked"),
-                );
+                const ids = [
+                  ...stack.team1.playerIds,
+                  ...stack.team2.playerIds,
+                ];
+                ids.forEach((id) => updatePlayerStatus(id, "Stacked"));
+                checkQuorumsForPlayers(ids);
               }
             },
+            testID: "court-action-back-to-stack",
           } as ActionItem,
         ]
       : []),
@@ -308,6 +325,7 @@ export default function CourtScreen() {
       icon: "delete-outline",
       destructive: true,
       onPress: () => setDeleteTarget(selectedCourt?.id ?? null),
+      testID: "court-action-delete",
     },
   ];
 
@@ -389,6 +407,7 @@ export default function CourtScreen() {
       <FAB
         icon="plus"
         onPress={handleAdd}
+        testID="court-add-fab"
         style={{ position: "absolute", bottom: 24, right: 24 }}
       />
 

@@ -23,11 +23,15 @@ interface StackCardProps {
   getPlayerLastPlayed: (playerId: string) => string | null;
   /** True when the given player is lock-paired with someone. */
   isPlayerLocked?: (playerId: string) => boolean;
+  /** True when playerIdA and playerIdB were teammates in each other's most recent recorded match — flags a repeat team combo so the admin can shuffle instead. */
+  isRepeatTeam?: (playerIdA: string, playerIdB: string) => boolean;
   courtName?: string;
   /** True when this is the stack that will be suggested for the next freed court. */
   isUpNext?: boolean;
   /** True when this stack has been manually pinned to jump the queue. */
   isPinned?: boolean;
+  /** True when this stack is tagged as a quorum — locked against per-player removal/move. */
+  isQuorum?: boolean;
   /** Whether to show the "Stack" title and queue position badge — the global queue order is confusing when split into group columns. */
   showLabel?: boolean;
   onMorePress: () => void;
@@ -37,6 +41,7 @@ interface StackCardProps {
 
 const TEAM1_COLOR = "#DC2626"; // red
 const TEAM2_COLOR = "#1D4ED8"; // blue
+const REPEAT_WARNING_COLOR = "#B45309"; // amber-700
 
 function formatRating(rating: PlayerRating): string {
   return rating === "NR" ? "NR" : rating.toFixed(1);
@@ -115,6 +120,7 @@ function PlayerAvatar({
       borderless
       style={{ borderRadius: 8 }}
       rippleColor={accentColor + "30"}
+      testID={`stack-card-player-${playerId}`}
     >
       <View
         style={{
@@ -198,9 +204,11 @@ export default function StackCard({
   getPlayerRating,
   getPlayerLastPlayed,
   isPlayerLocked,
+  isRepeatTeam,
   courtName,
   isUpNext,
   isPinned,
+  isQuorum,
   showLabel = true,
   onMorePress,
   onMoveToCourt,
@@ -210,6 +218,21 @@ export default function StackCard({
   const totalPlayers =
     stack.team1.playerIds.length + stack.team2.playerIds.length;
   const isFull = totalPlayers === 4;
+
+  /**
+   * A full team's two players flagged as a repeat combo when they're not
+   * lock-paired to each other (locking is a deliberate, persistent pairing
+   * choice, so it's never a "repeat" warning) and were teammates in their
+   * most recent match.
+   */
+  const isTeamRepeat = (playerIds: string[]) => {
+    if (playerIds.length !== 2) return false;
+    const [a, b] = playerIds;
+    if (isPlayerLocked?.(a) && isPlayerLocked?.(b)) return false;
+    return !!isRepeatTeam?.(a, b);
+  };
+  const team1IsRepeat = isTeamRepeat(stack.team1.playerIds);
+  const team2IsRepeat = isTeamRepeat(stack.team2.playerIds);
 
   // Re-render periodically so the "time elapsed" label stays fresh.
   const [, forceTick] = useState(0);
@@ -221,6 +244,7 @@ export default function StackCard({
   return (
     <Card
       mode="elevated"
+      testID={`stack-card-${stack.id}`}
       style={{
         borderLeftWidth: 4,
         borderLeftColor: isFull
@@ -313,6 +337,20 @@ export default function StackCard({
             </Chip>
           )}
 
+          {isQuorum && (
+            <Chip
+              compact
+              icon="account-group"
+              style={{
+                backgroundColor: "#E0E7FF",
+                marginRight: 4,
+              }}
+              textStyle={{ color: "#3730A3", fontSize: 11 }}
+            >
+              Quorum
+            </Chip>
+          )}
+
           {isFull && (
             <Chip
               compact
@@ -335,6 +373,7 @@ export default function StackCard({
             size={20}
             iconColor={theme.colors.onSurfaceVariant}
             onPress={onMorePress}
+            testID={`stack-card-menu-${stack.id}`}
           />
         </View>
 
@@ -350,17 +389,37 @@ export default function StackCard({
               gap: 8,
             }}
           >
-            <Text
-              variant="labelSmall"
+            <View
               style={{
-                color: TEAM1_COLOR,
-                fontWeight: "700",
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              Team 1
-            </Text>
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: TEAM1_COLOR,
+                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Team 1
+              </Text>
+              {team1IsRepeat && (
+                <View
+                  testID={`stack-card-repeat-warning-${stack.id}-team1`}
+                  accessibilityLabel="Repeat team from last match"
+                >
+                  <Icon
+                    source="alert-circle"
+                    size={14}
+                    color={REPEAT_WARNING_COLOR}
+                  />
+                </View>
+              )}
+            </View>
             <PlayerAvatar
               playerId={stack.team1.playerIds[0]}
               getPlayerName={getPlayerName}
@@ -449,17 +508,37 @@ export default function StackCard({
               gap: 8,
             }}
           >
-            <Text
-              variant="labelSmall"
+            <View
               style={{
-                color: TEAM2_COLOR,
-                fontWeight: "700",
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              Team 2
-            </Text>
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: TEAM2_COLOR,
+                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Team 2
+              </Text>
+              {team2IsRepeat && (
+                <View
+                  testID={`stack-card-repeat-warning-${stack.id}-team2`}
+                  accessibilityLabel="Repeat team from last match"
+                >
+                  <Icon
+                    source="alert-circle"
+                    size={14}
+                    color={REPEAT_WARNING_COLOR}
+                  />
+                </View>
+              )}
+            </View>
             <PlayerAvatar
               playerId={stack.team2.playerIds[0]}
               getPlayerName={getPlayerName}
@@ -521,6 +600,7 @@ export default function StackCard({
             onPress={onMoveToCourt}
             style={{ marginTop: 12 }}
             disabled={!isFull}
+            testID={`stack-card-move-to-court-${stack.id}`}
           >
             Move to Court
           </Button>
