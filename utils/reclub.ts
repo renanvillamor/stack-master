@@ -3,7 +3,8 @@
  * heading (a numbered list, e.g. "1. Renan"). Reclub's schedule text also
  * lists a smaller, differently-labeled group above "Participants" (session
  * organizers/instructors) — only the numbered lines after "Participants" are
- * treated as the roster to import.
+ * treated as the roster to import. Only the first word of each listed name
+ * is kept (e.g. "1. Renan Villamor" -> "Renan").
  */
 export function parseReclubParticipants(text: string): string[] {
   const lines = text.split(/\r?\n/);
@@ -18,7 +19,7 @@ export function parseReclubParticipants(text: string): string[] {
     if (line.trim() === "") continue;
     const match = line.match(/^\s*\d+\.\s*(.+?)\s*$/);
     if (!match) break;
-    const name = match[1].trim();
+    const name = match[1].trim().split(/\s+/)[0];
     if (name) names.push(name);
   }
   return names;

@@ -1,3 +1,4 @@
+import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
 import { Court, PlayerRating } from "@/types";
 import { differenceInMinutes } from "date-fns";
 import React, { useEffect, useState } from "react";
@@ -35,7 +36,7 @@ const TEAM2_COLOR = "#1D4ED8"; // blue
 
 interface CourtCardProps {
   court: Court;
-  onMorePress: () => void;
+  onMorePress?: () => void;
   onDone?: () => void;
   team1Players?: PlayerInfo[];
   team2Players?: PlayerInfo[];
@@ -45,6 +46,8 @@ interface CourtCardProps {
   gameStartedAt?: string | null;
   /** True when the given player is lock-paired with someone. */
   isPlayerLocked?: (playerId: string) => boolean;
+  /** Guest-viewer mode: hides the more-menu and END GAME button entirely instead of just disabling them. */
+  readOnly?: boolean;
 }
 
 function PlayerRow({
@@ -59,6 +62,53 @@ function PlayerRow({
   onPress?: () => void;
 }) {
   const theme = useTheme();
+  const isSmallDevice = useIsSmallDevice();
+
+  const avatar = (
+    <View
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: accentColor + "28",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Icon source="account" size={20} color={accentColor} />
+    </View>
+  );
+  const nameText = (
+    <Text
+      variant="bodyMedium"
+      style={{ color: theme.colors.onSurface, flex: 1 }}
+      numberOfLines={1}
+    >
+      {player.name}
+    </Text>
+  );
+  const lockIcon = isLocked ? (
+    <Icon source="lock" size={13} color={accentColor} />
+  ) : null;
+  const ratingBadge = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+      <Icon
+        source="medal-outline"
+        size={11}
+        color={theme.colors.onSurfaceVariant}
+      />
+      <Text
+        style={{
+          color: theme.colors.onSurfaceVariant,
+          fontSize: 11,
+          fontWeight: "700",
+        }}
+      >
+        {formatRating(player.rating)}
+      </Text>
+    </View>
+  );
+
   return (
     <TouchableRipple
       onPress={onPress}
@@ -67,58 +117,36 @@ function PlayerRow({
       style={{ borderRadius: 8 }}
       rippleColor={accentColor + "30"}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          paddingVertical: 2,
-          paddingHorizontal: 2,
-        }}
-      >
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            backgroundColor: accentColor + "28",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon source="account" size={20} color={accentColor} />
+      {isSmallDevice ? (
+        // Phones: name gets its own full-width row so it doesn't truncate;
+        // indicators drop to a second row.
+        <View style={{ gap: 2, paddingVertical: 2, paddingHorizontal: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {avatar}
+            {nameText}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {ratingBadge}
+            <View style={{ flex: 1 }} />
+            {lockIcon}
+          </View>
         </View>
-        <Text
-          variant="bodyMedium"
-          style={{ color: theme.colors.onSurface, flex: 1 }}
-          numberOfLines={1}
-        >
-          {player.name}
-        </Text>
-        {isLocked ? <Icon source="lock" size={13} color={accentColor} /> : null}
+      ) : (
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            gap: 3,
+            gap: 8,
+            paddingVertical: 2,
+            paddingHorizontal: 2,
           }}
         >
-          <Icon
-            source="medal-outline"
-            size={11}
-            color={theme.colors.onSurfaceVariant}
-          />
-          <Text
-            style={{
-              color: theme.colors.onSurfaceVariant,
-              fontSize: 11,
-              fontWeight: "700",
-            }}
-          >
-            {formatRating(player.rating)}
-          </Text>
+          {avatar}
+          {nameText}
+          {lockIcon}
+          {ratingBadge}
         </View>
-      </View>
+      )}
     </TouchableRipple>
   );
 }
@@ -169,9 +197,10 @@ export default function CourtCard({
   onPlayerPress,
   gameStartedAt,
   isPlayerLocked,
+  readOnly = false,
 }: CourtCardProps) {
   const theme = useTheme();
-  const hasGame = !!onDone && !!team1Players && !!team2Players;
+  const hasGame = !!team1Players && !!team2Players;
 
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -230,14 +259,16 @@ export default function CourtCard({
                 {formatGameElapsed(elapsedMinutes)}
               </Text>
             ) : null}
-            <IconButton
-              icon="dots-vertical"
-              size={20}
-              iconColor={theme.colors.onSurfaceVariant}
-              onPress={onMorePress}
-              testID={`court-card-menu-${court.id}`}
-              style={{ margin: 0 }}
-            />
+            {!readOnly && (
+              <IconButton
+                icon="dots-vertical"
+                size={20}
+                iconColor={theme.colors.onSurfaceVariant}
+                onPress={onMorePress}
+                testID={`court-card-menu-${court.id}`}
+                style={{ margin: 0 }}
+              />
+            )}
           </View>
         </View>
 
@@ -368,17 +399,19 @@ export default function CourtCard({
           </View>
         </View>
 
-        {/* Done button — always visible; disabled when no active game */}
-        <Button
-          mode="contained"
-          icon="flag-checkered"
-          onPress={onDone}
-          disabled={!onDone}
-          testID={`court-card-end-game-${court.id}`}
-          style={{ marginTop: 12 }}
-        >
-          END GAME
-        </Button>
+        {/* Done button — always visible; disabled when no active game. Hidden entirely in read-only (guest) mode. */}
+        {!readOnly && (
+          <Button
+            mode="contained"
+            icon="flag-checkered"
+            onPress={onDone}
+            disabled={!onDone}
+            testID={`court-card-end-game-${court.id}`}
+            style={{ marginTop: 12 }}
+          >
+            END GAME
+          </Button>
+        )}
       </View>
     </Card>
   );

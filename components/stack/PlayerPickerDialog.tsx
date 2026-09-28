@@ -1,4 +1,4 @@
-import { useSettingsStore } from "@/store/settingsStore";
+import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import React from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import {
@@ -29,8 +29,7 @@ export default function PlayerPickerDialog({
   const theme = useTheme();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
-  const { landscapeColumns } = useSettingsStore();
-  const numColumns = isLandscape ? landscapeColumns : 1;
+  const numColumns = useResponsiveColumns();
   const cardWidth =
     numColumns === 1 ? "100%" : numColumns === 2 ? "48.5%" : "31.5%";
 

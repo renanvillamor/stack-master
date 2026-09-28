@@ -16,6 +16,8 @@ StackMaster is an Expo React Native app for running pickleball "stacking" sessio
 | State / Store | Zustand v5 + Immer middleware                                                          |
 | Persistence   | Zustand `persist` + `@react-native-async-storage/async-storage`                        |
 | Dates         | `date-fns`                                                                             |
+| Realtime sync | Supabase (`@supabase/supabase-js`) — see "Session Sync" below                          |
+| QR codes      | `react-native-qrcode-svg` (generate) + `expo-camera` (scan)                            |
 | Language      | TypeScript (`strict: true`)                                                            |
 
 Path alias: **`@/*` → repo root** (`tsconfig.json`). Always import via `@/store/...`, `@/components/...`, `@/utils/...`, `@/types`, never relative paths across top-level folders.
@@ -23,6 +25,8 @@ Path alias: **`@/*` → repo root** (`tsconfig.json`). Always import via `@/stor
 `patches/` (via `patch-package`, runs on `postinstall`) patches `expo-modules-core`, `react-native-gesture-handler`, `react-native-reanimated`, `react-native-safe-area-context`, `react-native-screens` (+ `-jni`), and `react-native-worklets` — the gesture-handler/reanimated/screens cluster that `@gorhom/bottom-sheet` depends on. Run `npm install` after cloning so these apply; regenerate the relevant patch if you upgrade any of those packages.
 
 App is **light-mode only**: `app.json` sets `userInterfaceStyle: "light"` and `app/_layout.tsx` hardcodes `<PaperProvider theme={lightTheme}>`. Orientation is unlocked (`app.json` → `orientation: "default"`), so every list screen has to handle portrait/landscape itself (see "Landscape & columns" below).
+
+Session Sync (see below) needs a Supabase project's `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY` in a local `.env` (see `.env.example`; gitignored). Without them, hosting/joining fails but the rest of the app is unaffected.
 
 ---
 
@@ -51,6 +55,7 @@ components/
     CourtFormModal.tsx            # Add/edit court name
     NextStackPromptDialog.tsx     # Post-game: "move this ready stack onto the freed court?"
     IncompleteStackPromptDialog.tsx # Post-game: next stack isn't full yet — offers alternatives
+    GuestCourtView.tsx             # Read-only Court screen for guests, sourced from sessionStore.remoteSnapshot
   player/
     PlayerCard.tsx                 # Roster list item with status chip, rating, lock/quorum icons
     PlayerFormModal.tsx            # Add/edit player(s); comma-separated names = bulk add
@@ -61,9 +66,15 @@ components/
     CourtPickerModal.tsx           # Pick a destination court
     MoveToStackDialog.tsx          # Pick a destination queued stack for "Move to Stack"
     PlayerPickerDialog.tsx         # Generic "pick a player" grid, used by all swap flows
+    GuestStackView.tsx             # Read-only Stack screen for guests, sourced from sessionStore.remoteSnapshot
   team/
     TeamManagementModal.tsx        # Persistent "team roster" (separate from live players) used to seed a new session
     TeamMemberFormModal.tsx        # Add/edit team roster member(s)
+  session/
+    GuestSessionBanner.tsx         # Guest's only exit from a joined session (Player/Settings tabs are hidden to them)
+  settings/
+    SessionSyncSection.tsx         # Settings card: Host/Join controls, QR + code + live guest list while hosting
+    JoinSessionModal.tsx           # QR scan (expo-camera, default step) / code entry fallback / guest-name prompt, 3-step dialog
   Themed.tsx, StyledText.tsx, ExternalLink.tsx, EditScreenInfo.tsx,
   useColorScheme.ts(.web.ts), useClientOnlyValue.ts(.web.ts)
                                     # Expo-template scaffolding, only wired to app/modal.tsx — dead weight for
@@ -77,13 +88,18 @@ store/
   quorumStore.ts       # Saved 4-player groups ("always play together")
   settingsStore.ts     # App-wide toggles
   teamStore.ts          # Persistent team roster (separate from playerStore)
+  sessionStore.ts        # Host/guest role + live-session state — see "Session Sync" below
 
 types/index.ts        # All shared TypeScript interfaces/types — define new shared types here, never duplicate locally
 theme/index.ts          # React Native Paper MD3 theme (green palette) — the app's real design tokens
+lib/supabase.ts          # Supabase client (anon key, no auth persistence) — reads EXPO_PUBLIC_SUPABASE_* env vars
+supabase/schema.sql        # sessions table + RLS + RPCs — run in the Supabase SQL editor (idempotent)
 utils/
   groupQueue.ts          # Beginner/advanced classification for multi-group stacking
   quorum.ts                # Quorum consolidation algorithm
   time.ts                   # formatLastPlayed() relative-time formatter
+  sessionCode.ts             # generateSessionCode() — 6-char unambiguous session codes
+  sessionSync.ts              # Supabase channel/presence/RPC wiring used by sessionStore
 
 constants/Colors.ts     # Legacy Expo-template light/dark map — NOT the real palette (see Styling below)
 global.css               # Tailwind base/components/utilities
@@ -159,6 +175,23 @@ interface Quorum {
   stackId: string | null; // the stack currently holding all 4 together, or null while waiting
   createdAt: string;
 }
+
+type SessionRole = "host" | "guest" | null;
+
+interface GuestPresence {
+  id: string;
+  name: string;
+}
+
+// Everything a guest needs to render read-only Court/Stack screens; pushed by
+// the host on every relevant store change. See "Session Sync" below.
+interface SessionSnapshot {
+  courts: Court[];
+  stacks: Stack[];
+  players: Player[];
+  pinnedStackId: string | null;
+  quorums: Quorum[];
+}
 ```
 
 ---
@@ -211,6 +244,19 @@ Cross-store reads use `useXStore.getState()` inside another store's action (e.g.
 ### `store/teamStore.ts`
 
 A **persistent roster separate from `playerStore`**: `teamName`, `members: TeamMember[]` (each with an `active` flag). Used only by Settings → "New Session" to reseed `playerStore` after a wipe, and by `TeamManagementModal`/`TeamMemberFormModal`. Not touched by any in-session gameplay logic.
+
+### `store/sessionStore.ts`
+
+Host/guest role and live-session connection state. Unlike the other stores, only a small identity subset is persisted (via `persist`'s `partialize`) — `role`, `sessionId`, `hostKey`, `guestId`, `guestName` — never the ephemeral `remoteSnapshot`/`guestsPresent`/`connectionStatus`, since those are refetched on reconnect. The actual Supabase `RealtimeChannel` and store-subscription teardown functions live in module state inside `utils/sessionSync.ts`, not in the Zustand store, since channels aren't serializable.
+
+- `role: "host" | "guest" | null`, `sessionId`, `hostKey` (host only), `guestId` (generated once per device, used as the realtime presence key), `guestName`, `connectionStatus`, `guestsPresent: GuestPresence[]` (host only), `remoteSnapshot: SessionSnapshot | null` (guest only), `sessionEnded` (guest-only flag set when the host stops hosting).
+- `startHosting()` — generates a 6-char code (`utils/sessionCode.ts`), retries on collision, creates the Supabase row, and opens the host sync channel.
+- `stopHosting()` — broadcasts `session_ended`, deletes the Supabase row, tears down the channel/subscriptions.
+- `joinSession(code, name)` — validates the code exists, seeds `remoteSnapshot`, opens the guest sync channel, tracks presence.
+- `leaveSession()` — untracks presence, tears down the channel, clears role.
+- `rehydrateConnection()` — called once from `app/_layout.tsx` on launch; re-opens the channel for a role/session restored from persisted storage (so a killed-and-reopened host/guest app keeps working).
+
+See "Session Sync" below for the full host/guest architecture.
 
 ### `store/stackStore.ts` — the queueing engine
 
@@ -299,6 +345,8 @@ Shows every court as a `CourtCard`: name, live elapsed-game timer (re-renders ev
   4. `checkQuorumsForPlayers(allIds)` — let any quorum touching these players try to reassemble.
   5. Look at `getNextQueuedStack()`: if full, show `NextStackPromptDialog` (offer to move it onto the just-freed court, via `assignCourtToStack` + mark 4 players `"Playing"`); if not full, show `IncompleteStackPromptDialog` offering either "Move Next Available Stack" (`getSuggestedNextStack()` — a looser, oldest-_ready_ search) or "Complete This Stack" (navigates to the Stack tab).
 
+**Guest mode**: if `sessionStore.role === "guest"`, the screen renders `GuestSessionBanner` + `GuestCourtView` instead of the above — a read-only mirror sourced from `sessionStore.remoteSnapshot` (see "Session Sync" below). The early return sits after all hooks, before the host-only handlers/derived state.
+
 ### Stack screen (`app/(tabs)/stack.tsx`)
 
 Manages the queue of unassigned stacks.
@@ -312,6 +360,8 @@ Manages the queue of unassigned stacks.
   - **Remove from Stack**: confirm dialog (warns if a locked partner will also be removed) → `removeSinglePlayerFromStack`, mark removed ids `"Available"`.
 - **Move to Court** (per-card, enabled only when full): 0 courts → auto-creates "Court 1" and assigns immediately; exactly 1 available court → assigns immediately, skipping the picker; otherwise `CourtPickerModal`. On selection: `assignCourtToStack` + mark all 4 players `"Playing"`.
 - Empty state: "Stack is empty" — hint to long-press players on the Player tab.
+
+**Guest mode**: same pattern as the Court screen — `sessionStore.role === "guest"` renders `GuestSessionBanner` + `GuestStackView` instead, a read-only mirror (including the multi-group column split) sourced from `sessionStore.remoteSnapshot`.
 
 ### Players screen (`app/(tabs)/player.tsx`)
 
@@ -329,6 +379,7 @@ Full roster management: search, status filter, sort, multi-select bulk actions, 
 ### Settings screen (`app/(tabs)/settings.tsx`)
 
 - **Stack Configuration**: Landscape Columns (`SegmentedButtons` 1/2/3) · Multiple Group Stack switch · Auto-Stack Players switch ("Stack players into win/lose stack on game end") · Shuffle Players switch ("Split winners & losers onto opposite teams").
+- **Live Sync** (`SessionSyncSection`): Host/Join controls — see "Session Sync" below. Only reachable when `role !== "guest"` (guests never see the Settings tab at all).
 - **Session**: Team Management (opens `TeamManagementModal`, backed by `teamStore`) · **New Session** (destructive confirm; dialog text appends "N active team member(s) will be loaded automatically" when applicable). On confirm: wipes `stackStore`, `playerStore`, `courtStore` (`clearAll()` each), then re-adds one player per **active** team-roster member (`addPlayer(m.name, m.rating)`).
 - **About**: static app version / coffee-link rows, not wired to anything.
 
@@ -354,7 +405,21 @@ When `settingsStore.multiGroupStack` is on, the app maintains **separate beginne
 
 ### Landscape & columns
 
-`isLandscape = width > height` (`useWindowDimensions`). Court, Players, and single-group Stack screens set `numColumns = isLandscape ? landscapeColumns : 1` (`landscapeColumns` from Settings, 1–3) and pad an uneven last row with invisible spacer items; the `FlatList` is keyed by `numColumns` (RN requires remounting to change column count). Multi-group Stack mode ignores this entirely (always 2 fixed columns). Dialogs (`AlertDialog`, `ConfirmDialog`, `CourtFormModal`) constrain themselves to 50% width, centered, in landscape.
+`isLandscape = width > height` (`useWindowDimensions`). Court, Players, single-group Stack, and their guest read-only mirrors (`GuestCourtView`/`GuestStackView`) get their column count from `hooks/useResponsiveColumns.ts`, not the raw setting directly: `numColumns = isLandscape && !isSmallDevice ? landscapeColumns : 1`, where `isSmallDevice` is `Math.min(width, height) < 600` — Android's own `sw600dp` tablet-qualifier threshold, checked against the shorter dimension so it's stable across rotation. This means the `landscapeColumns` setting (1–3) only actually takes effect on tablet-sized devices; a phone always gets 1 column regardless of the setting, since 2-3 columns truncates `CourtCard`/`PlayerCard`/`StackCard` content at phone widths. An uneven last row is padded with invisible spacer items; the `FlatList` is keyed by `numColumns` (RN requires remounting to change column count). Multi-group Stack mode ignores all of this entirely (always 2 fixed side-by-side columns, unaffected by device size). Dialogs (`AlertDialog`, `ConfirmDialog`, `CourtFormModal`) constrain themselves to 50% width, centered, in landscape. `CourtCard`/`StackCard` player rows also switch on `useIsSmallDevice()`: on phones the avatar + name take a full row and the rating/last-played/lock indicators drop to a second row (so names don't truncate); tablets keep the original inline layout.
+
+### Session Sync (host/guest live viewing)
+
+One device can **host** a session so others can passively **watch** the Court and Stack screens live, with no user accounts — auth is a shared secret, not identity.
+
+- **Identification**: a 6-char public code (`utils/sessionCode.ts`, e.g. `A7K3PX`), shown as text and as a QR (`react-native-qrcode-svg`) in `SessionSyncSection`. Guests join by scanning (`expo-camera`) or typing the code into `JoinSessionModal`.
+- **Authorization**: only the host holds a `host_key` (minted client-side, persisted locally). All writes to the Supabase `sessions` row go through `SECURITY DEFINER` RPCs (`create_session` / `update_session_state` / `end_session`) that check `host_key` matches; anon RLS only grants `SELECT`. Guests never see the host key.
+- **Transport** (`utils/sessionSync.ts`): a Supabase Realtime channel per session (`session-<code>`) carries `broadcast` state pushes and `presence` (guest list) — no table replication needs enabling in the Supabase dashboard. The `sessions.state` column is the durable snapshot a late-joining guest fetches on join; broadcasts are what keep already-connected guests live (~400ms debounced).
+- **What syncs**: `SessionSnapshot` = `courts` + `stacks` + `players` + `pinnedStackId` (from `stackStore`) + `quorums` + `multiGroupStack` — everything Court/Stack need to render faithfully, including the host's queue-layout setting (a guest must see the same Beginner/Advanced split the host is running, not their own local default). `landscapeColumns` and `teamStore` stay **local per device** on both host and guest — those are genuinely per-viewer display preferences, not game state.
+- **Host push**: `startHostSync` subscribes to `courtStore`/`stackStore`/`playerStore`/`quorumStore`/`settingsStore` and re-pushes the full snapshot (debounced) on any change, via both an `update_session_state` RPC call (durability) and a `broadcast` (low latency).
+- **Guest render**: a **separate read-only layer**, not a takeover of the guest's own local stores — `sessionStore.remoteSnapshot` feeds `GuestCourtView`/`GuestStackView`, so a guest's own standalone roster/queue (if they use the app independently) is never touched. `CourtCard`/`StackCard` accept a `readOnly` prop that hides the ⋮ menu, END GAME, and Move to Court controls entirely (not just disabled) when set.
+- **Guest tab bar**: `app/(tabs)/_layout.tsx` sets `href: null` on the `player`/`settings` tab screens whenever `sessionStore.role === "guest"`, so Players/Settings drop out of the tab bar entirely. A guest's only way out of a session is the "Leave" control in `GuestSessionBanner`, rendered atop the Court/Stack screens.
+- **Ending a session**: host's "Stop Hosting" broadcasts a `session_ended` event before deleting the row; guests show an alert and auto-leave. `rehydrateConnection()` (called once from `app/_layout.tsx`) re-opens the channel for a persisted role/session after an app relaunch, so killing the host or guest app mid-session doesn't end it.
+- **Setup**: needs `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env` (see `.env.example`) and `supabase/schema.sql` (the `sessions` table + RLS policy + the three RPCs) applied in the Supabase project's SQL editor. The script is idempotent — safe to re-run after schema changes.
 
 ---
 
@@ -406,7 +471,8 @@ Three overlapping sources of color exist; **know which one you're touching**:
 8. **File naming** — PascalCase for components/screens, camelCase for stores and utilities.
 9. **Layout awareness** — always detect orientation with `useWindowDimensions()` when building a new list/grid screen; follow the `isLandscape`/`numColumns`/spacer pattern already used by Court/Player/Stack screens (see "Landscape & columns").
 10. **Component extraction** — when a JSX block is large or self-contained (modal, dialog, bottom sheet, form), extract it into its own file under the matching `components/` subdirectory rather than inlining it in a screen.
-11. **Locked-pair / quorum awareness** — any new stack-mutating action should account for `lockedPartnerId` (keep pairs together, same team, never split across stacks) and should avoid disturbing a quorum's stack; check how `stackStore.ts`'s existing actions handle both before adding a new one.
+11. **`Dialog.Actions` children** — Paper clones each direct child with a `compact` prop, so never wrap conditional buttons in a `<>` Fragment there (React warns "Invalid prop `compact` supplied to `React.Fragment`"). Render a keyed array (`cond && [<Button key="a" />, <Button key="b" />]`) or individual conditionals instead.
+12. **Locked-pair / quorum awareness** — any new stack-mutating action should account for `lockedPartnerId` (keep pairs together, same team, never split across stacks) and should avoid disturbing a quorum's stack; check how `stackStore.ts`'s existing actions handle both before adding a new one.
 
 ---
 

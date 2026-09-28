@@ -11,13 +11,17 @@ import IncompleteStackPromptDialog from "@/components/court/IncompleteStackPromp
 import NextStackPromptDialog from "@/components/court/NextStackPromptDialog";
 import CourtPickerModal from "@/components/stack/CourtPickerModal";
 import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
+import GuestCourtView from "@/components/court/GuestCourtView";
+import GuestSessionBanner from "@/components/session/GuestSessionBanner";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
 import { useQuorumStore } from "@/store/quorumStore";
+import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Court, Stack } from "@/types";
 import { checkQuorumsForPlayers } from "@/utils/quorum";
+import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
@@ -29,10 +33,9 @@ export default function CourtScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
-  const { shufflePlayers, autoStackPlayers, landscapeColumns } =
-    useSettingsStore();
+  const { shufflePlayers, autoStackPlayers } = useSettingsStore();
   const isLandscape = width > height;
-  const numColumns = isLandscape ? landscapeColumns : 1;
+  const numColumns = useResponsiveColumns();
   const { courts, removeCourt } = useCourtStore();
   const {
     stacks,
@@ -73,6 +76,16 @@ export default function CourtScreen() {
     candidates: string[];
   } | null>(null);
   const [noSwapCandidates, setNoSwapCandidates] = useState(false);
+
+  const role = useSessionStore((s) => s.role);
+  if (role === "guest") {
+    return (
+      <View className="flex-1 bg-app-bg pt-20">
+        <GuestSessionBanner />
+        <GuestCourtView />
+      </View>
+    );
+  }
 
   const getPlayerInfo = (id: string) => {
     const p = players.find((pl) => pl.id === id);
@@ -264,10 +277,19 @@ export default function CourtScreen() {
 
   const confirmDelete = () => {
     if (deleteTarget) {
+      const stack = getActiveStack(deleteTarget);
+      if (stack) {
+        returnStackToQueue(stack.id);
+        const ids = [...stack.team1.playerIds, ...stack.team2.playerIds];
+        ids.forEach((id) => updatePlayerStatus(id, "Stacked"));
+        checkQuorumsForPlayers(ids);
+      }
       removeCourt(deleteTarget);
       setDeleteTarget(null);
     }
   };
+
+  const deleteTargetHasPlayers = !!(deleteTarget && getActiveStack(deleteTarget));
 
   const emptyCourts = courts.filter(
     (c) => !getActiveStack(c.id) && c.id !== selectedCourt?.id,
@@ -352,6 +374,7 @@ export default function CourtScreen() {
         numColumns={numColumns}
         contentContainerStyle={{ padding: 16, gap: 10, flexGrow: 1 }}
         columnWrapperStyle={numColumns > 1 ? { gap: 10 } : undefined}
+        extraData={{ players, stacks }}
         renderItem={({ item }) => {
           if ("_spacer" in item) {
             return <View style={{ flex: 1 }} />;
@@ -421,7 +444,11 @@ export default function CourtScreen() {
       <ConfirmDialog
         visible={!!deleteTarget}
         title="Remove Court"
-        message="Are you sure you want to remove this court?"
+        message={
+          deleteTargetHasPlayers
+            ? "This court has an active game. Its players will be moved back to the stack. Are you sure you want to remove this court?"
+            : "Are you sure you want to remove this court?"
+        }
         onConfirm={confirmDelete}
         onDismiss={() => setDeleteTarget(null)}
       />

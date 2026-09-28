@@ -1,3 +1,4 @@
+import { useSessionStore } from "@/store/sessionStore";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Tabs } from "expo-router";
 import React from "react";
@@ -10,6 +11,9 @@ type IconProps = { color: string; size: number; focused: boolean };
 export default function TabLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // Guests only ever get Court + Stack — Player/Settings drop out of the tab
+  // bar entirely so there's no path to roster/settings screens.
+  const isGuest = useSessionStore((s) => s.role === "guest");
 
   const BASE_TAB_HEIGHT = 56;
   const paddingBottom = insets.bottom + (Platform.OS === "ios" ? 4 : 8);
@@ -67,6 +71,7 @@ export default function TabLayout() {
         name="player"
         options={{
           title: "Players",
+          href: isGuest ? null : undefined,
           tabBarIcon: ({ color, size, focused }: IconProps) => (
             <MaterialCommunityIcons
               name={focused ? "account-group" : "account-group-outline"}
@@ -80,6 +85,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
+          href: isGuest ? null : undefined,
           tabBarIcon: ({ color, size, focused }: IconProps) => (
             <MaterialCommunityIcons
               name={focused ? "cog" : "cog-outline"}

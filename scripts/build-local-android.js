@@ -18,7 +18,10 @@ try {
     });
   }
 
-  const gradleCmd = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
+  // Explicit relative prefix on Windows too — a bare "gradlew.bat" silently
+  // fails to resolve on machines with NoDefaultCurrentDirectoryInExePath=1
+  // (a common security policy that disables cmd.exe's implicit cwd lookup).
+  const gradleCmd = process.platform === "win32" ? ".\\gradlew.bat" : "./gradlew";
   execSync(`${gradleCmd} assemble${variant}`, {
     cwd: androidDir,
     stdio: "inherit",

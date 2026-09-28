@@ -83,3 +83,23 @@ export interface Quorum {
   stackId: string | null;
   createdAt: string;
 }
+
+// ─── Session Sync ────────────────────────────────────────────────────────────
+
+export type SessionRole = "host" | "guest" | null;
+
+export interface GuestPresence {
+  id: string;
+  name: string;
+}
+
+/** Everything a guest needs to render read-only Court/Stack screens, pushed by the host on every relevant store change. */
+export interface SessionSnapshot {
+  courts: Court[];
+  stacks: Stack[];
+  players: Player[];
+  pinnedStackId: string | null;
+  quorums: Quorum[];
+  /** Host's multi-group (Beginner/Advanced) stacking setting — guests mirror the host's queue layout rather than their own local preference. */
+  multiGroupStack: boolean;
+}

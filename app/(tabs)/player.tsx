@@ -18,6 +18,7 @@ import { useStackStore } from "@/store/stackStore";
 import { Player, PlayerStatus } from "@/types";
 import { getPlayerGroup, getStackGroup } from "@/utils/groupQueue";
 import { findLockedOutsideQuorum, tryConsolidateQuorum } from "@/utils/quorum";
+import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import {
@@ -43,10 +44,10 @@ export default function PlayerScreen() {
   } = useStackStore();
   const { quorums, createQuorum, removeQuorum, removeQuorumForPlayer } =
     useQuorumStore();
-  const { landscapeColumns, multiGroupStack } = useSettingsStore();
+  const { multiGroupStack } = useSettingsStore();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
-  const numColumns = isLandscape ? landscapeColumns : 1;
+  const numColumns = useResponsiveColumns();
 
   const theme = useTheme();
   const [modalVisible, setModalVisible] = useState(false);

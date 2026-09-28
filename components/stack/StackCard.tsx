@@ -1,3 +1,4 @@
+import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
 import { PlayerRating, Stack } from "@/types";
 import { formatLastPlayed } from "@/utils/time";
 import { differenceInHours, differenceInMinutes } from "date-fns";
@@ -34,9 +35,11 @@ interface StackCardProps {
   isQuorum?: boolean;
   /** Whether to show the "Stack" title and queue position badge — the global queue order is confusing when split into group columns. */
   showLabel?: boolean;
-  onMorePress: () => void;
-  onMoveToCourt: () => void;
-  onPlayerPress: (playerId: string, team: 1 | 2) => void;
+  onMorePress?: () => void;
+  onMoveToCourt?: () => void;
+  onPlayerPress?: (playerId: string, team: 1 | 2) => void;
+  /** Guest-viewer mode: hides the more-menu and Move to Court button entirely instead of just disabling them. */
+  readOnly?: boolean;
 }
 
 const TEAM1_COLOR = "#DC2626"; // red
@@ -80,6 +83,7 @@ function PlayerAvatar({
   onPress?: () => void;
 }) {
   const theme = useTheme();
+  const isSmallDevice = useIsSmallDevice();
 
   if (!playerId) {
     return (
@@ -114,6 +118,69 @@ function PlayerAvatar({
   const name = getPlayerName(playerId);
   const rating = getPlayerRating(playerId);
   const lastPlayed = getPlayerLastPlayed(playerId);
+
+  const avatar = (
+    <View
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: accentColor + "28",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Icon source="account" size={20} color={accentColor} />
+    </View>
+  );
+  const lockIcon = isLocked ? (
+    <Icon source="lock" size={13} color={accentColor} />
+  ) : null;
+  const ratingBadge = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+      <Icon
+        source="medal-outline"
+        size={11}
+        color={theme.colors.onSurfaceVariant}
+      />
+      <Text
+        style={{
+          color: theme.colors.onSurfaceVariant,
+          fontSize: 11,
+          fontWeight: "700",
+        }}
+      >
+        {formatRating(rating)}
+      </Text>
+    </View>
+  );
+  const lastPlayedBadge = (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
+        flexShrink: 1,
+      }}
+    >
+      <Icon
+        source="clock-outline"
+        size={11}
+        color={theme.colors.onSurfaceVariant}
+      />
+      <Text
+        style={{
+          color: theme.colors.onSurfaceVariant,
+          fontSize: 11,
+          flexShrink: 1,
+        }}
+        numberOfLines={1}
+      >
+        {formatLastPlayed(lastPlayed)}
+      </Text>
+    </View>
+  );
+
   return (
     <TouchableRipple
       onPress={onPress}
@@ -122,77 +189,61 @@ function PlayerAvatar({
       rippleColor={accentColor + "30"}
       testID={`stack-card-player-${playerId}`}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          paddingVertical: 2,
-          paddingHorizontal: 2,
-        }}
-      >
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            backgroundColor: accentColor + "28",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon source="account" size={20} color={accentColor} />
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      {isSmallDevice ? (
+        // Phones: name gets its own full-width row so it doesn't truncate;
+        // indicators drop to a second row.
+        <View style={{ gap: 2, paddingVertical: 2, paddingHorizontal: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {avatar}
             <Text
               variant="bodyMedium"
-              style={{ color: theme.colors.onSurface, flexShrink: 1 }}
+              style={{ color: theme.colors.onSurface, flex: 1 }}
               numberOfLines={1}
             >
               {name}
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Icon
-                source="medal-outline"
-                size={11}
-                color={theme.colors.onSurfaceVariant}
-              />
-              <Text
-                style={{
-                  color: theme.colors.onSurfaceVariant,
-                  fontSize: 11,
-                  fontWeight: "700",
-                }}
-              >
-                {formatRating(rating)}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }} />
-            {isLocked ? (
-              <Icon source="lock" size={13} color={accentColor} />
-            ) : null}
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Icon
-                source="clock-outline"
-                size={11}
-                color={theme.colors.onSurfaceVariant}
-              />
+            {ratingBadge}
+            {lastPlayedBadge}
+            <View style={{ flex: 1 }} />
+            {lockIcon}
+          </View>
+        </View>
+      ) : (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 2,
+            paddingHorizontal: 2,
+          }}
+        >
+          {avatar}
+          <View style={{ flex: 1, gap: 2 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
               <Text
-                style={{
-                  color: theme.colors.onSurfaceVariant,
-                  fontSize: 11,
-                }}
+                variant="bodyMedium"
+                style={{ color: theme.colors.onSurface, flexShrink: 1 }}
                 numberOfLines={1}
               >
-                {formatLastPlayed(lastPlayed)}
+                {name}
               </Text>
+              {ratingBadge}
+              <View style={{ flex: 1 }} />
+              {lockIcon}
+            </View>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              {lastPlayedBadge}
             </View>
           </View>
         </View>
-      </View>
+      )}
     </TouchableRipple>
   );
 }
@@ -213,6 +264,7 @@ export default function StackCard({
   onMorePress,
   onMoveToCourt,
   onPlayerPress,
+  readOnly = false,
 }: StackCardProps) {
   const theme = useTheme();
   const totalPlayers =
@@ -368,13 +420,15 @@ export default function StackCard({
             </Chip>
           )}
 
-          <IconButton
-            icon="dots-vertical"
-            size={20}
-            iconColor={theme.colors.onSurfaceVariant}
-            onPress={onMorePress}
-            testID={`stack-card-menu-${stack.id}`}
-          />
+          {!readOnly && (
+            <IconButton
+              icon="dots-vertical"
+              size={20}
+              iconColor={theme.colors.onSurfaceVariant}
+              onPress={onMorePress}
+              testID={`stack-card-menu-${stack.id}`}
+            />
+          )}
         </View>
 
         {/* Teams side by side */}
@@ -432,7 +486,7 @@ export default function StackCard({
               }
               accentColor={TEAM1_COLOR}
               onPress={
-                stack.team1.playerIds[0]
+                stack.team1.playerIds[0] && onPlayerPress
                   ? () => onPlayerPress(stack.team1.playerIds[0], 1)
                   : undefined
               }
@@ -449,7 +503,7 @@ export default function StackCard({
               }
               accentColor={TEAM1_COLOR}
               onPress={
-                stack.team1.playerIds[1]
+                stack.team1.playerIds[1] && onPlayerPress
                   ? () => onPlayerPress(stack.team1.playerIds[1], 1)
                   : undefined
               }
@@ -551,7 +605,7 @@ export default function StackCard({
               }
               accentColor={TEAM2_COLOR}
               onPress={
-                stack.team2.playerIds[0]
+                stack.team2.playerIds[0] && onPlayerPress
                   ? () => onPlayerPress(stack.team2.playerIds[0], 2)
                   : undefined
               }
@@ -568,7 +622,7 @@ export default function StackCard({
               }
               accentColor={TEAM2_COLOR}
               onPress={
-                stack.team2.playerIds[1]
+                stack.team2.playerIds[1] && onPlayerPress
                   ? () => onPlayerPress(stack.team2.playerIds[1], 2)
                   : undefined
               }
@@ -576,35 +630,36 @@ export default function StackCard({
           </View>
         </View>
 
-        {/* Footer */}
-        {courtName ? (
-          <Chip
-            compact
-            icon="map-marker"
-            style={{
-              alignSelf: "flex-start",
-              marginTop: 12,
-              backgroundColor: theme.colors.secondaryContainer,
-            }}
-            textStyle={{
-              color: theme.colors.onSecondaryContainer,
-              fontSize: 12,
-            }}
-          >
-            {courtName}
-          </Chip>
-        ) : (
-          <Button
-            mode={isFull ? "contained" : "outlined"}
-            icon="map-marker-plus-outline"
-            onPress={onMoveToCourt}
-            style={{ marginTop: 12 }}
-            disabled={!isFull}
-            testID={`stack-card-move-to-court-${stack.id}`}
-          >
-            Move to Court
-          </Button>
-        )}
+        {/* Footer — hidden entirely in read-only (guest) mode. */}
+        {!readOnly &&
+          (courtName ? (
+            <Chip
+              compact
+              icon="map-marker"
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 12,
+                backgroundColor: theme.colors.secondaryContainer,
+              }}
+              textStyle={{
+                color: theme.colors.onSecondaryContainer,
+                fontSize: 12,
+              }}
+            >
+              {courtName}
+            </Chip>
+          ) : (
+            <Button
+              mode={isFull ? "contained" : "outlined"}
+              icon="map-marker-plus-outline"
+              onPress={onMoveToCourt}
+              style={{ marginTop: 12 }}
+              disabled={!isFull}
+              testID={`stack-card-move-to-court-${stack.id}`}
+            >
+              Move to Court
+            </Button>
+          ))}
 
         <View
           style={{

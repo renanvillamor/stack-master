@@ -115,114 +115,129 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
         onDismiss={handleReset}
       >
         <BottomSheetView style={{ flex: 1 }}>
-          <View
-            style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}
-          >
-            <Text
-              variant="titleMedium"
-              style={{ color: theme.colors.onSurface }}
-            >
-              Import from Reclub
-            </Text>
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-            >
-              Paste the session details you copied from Reclub. Names listed
-              under &quot;Participants&quot; will replace your current
-              player roster and queue. Courts are kept.
-            </Text>
-          </View>
-          <Divider />
-
-          <View style={{ padding: 20, paddingBottom: 12 }}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder="Paste Reclub data here..."
-              placeholderTextColor={theme.colors.onSurfaceVariant}
-              multiline
-              textAlignVertical="top"
-              testID="import-reclub-text-input"
-              style={{
-                height: 120,
-                borderWidth: 1,
-                borderColor: theme.colors.outlineVariant,
-                borderRadius: 10,
-                padding: 12,
-                color: theme.colors.onSurface,
-                backgroundColor: theme.colors.surfaceVariant + "40",
-                fontSize: 14,
-              }}
-            />
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 20,
-              paddingBottom: 8,
-            }}
-          >
-            <Text
-              variant="labelMedium"
-              style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
-            >
-              {parsedNames.length > 0
-                ? `${parsedNames.length} participant${parsedNames.length === 1 ? "" : "s"} found`
-                : text.trim()
-                  ? 'No "Participants" list found in the pasted text.'
-                  : ""}
-            </Text>
-          </View>
-
           <BottomSheetScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingBottom: Math.max(insets.bottom, 16),
-            }}
+            contentContainerStyle={{ paddingBottom: 16 }}
           >
-            {parsedNames.map((name, index) => {
-              const isSelected = !deselected.has(index);
-              return (
-                <TouchableOpacity
-                  key={`${name}-${index}`}
-                  testID={`import-reclub-participant-${index}`}
-                  onPress={() => toggleIndex(index)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 20,
-                    paddingVertical: 12,
-                    gap: 14,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name={
-                      isSelected ? "checkbox-marked" : "checkbox-blank-outline"
-                    }
-                    size={22}
-                    color={
-                      isSelected
-                        ? theme.colors.primary
-                        : theme.colors.onSurfaceVariant
-                    }
-                  />
-                  <Text
-                    variant="bodyLarge"
+            <View
+              style={{
+                paddingHorizontal: 20,
+                paddingTop: 4,
+                paddingBottom: 12,
+              }}
+            >
+              <Text
+                variant="titleMedium"
+                style={{ color: theme.colors.onSurface }}
+              >
+                Import from Reclub
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+              >
+                Paste the session details you copied from Reclub. Names
+                listed under &quot;Participants&quot; will replace your
+                current player roster and queue. Courts are kept.
+              </Text>
+            </View>
+            <Divider />
+
+            <View style={{ padding: 20, paddingBottom: 12 }}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder="Paste Reclub data here..."
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                multiline
+                textAlignVertical="top"
+                testID="import-reclub-text-input"
+                style={{
+                  height: 120,
+                  borderWidth: 1,
+                  borderColor: theme.colors.outlineVariant,
+                  borderRadius: 10,
+                  padding: 12,
+                  color: theme.colors.onSurface,
+                  backgroundColor: theme.colors.surfaceVariant + "40",
+                  fontSize: 14,
+                }}
+              />
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingBottom: 8,
+              }}
+            >
+              <Text
+                variant="labelMedium"
+                style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
+              >
+                {parsedNames.length > 0
+                  ? `${parsedNames.length} participant${parsedNames.length === 1 ? "" : "s"} found`
+                  : text.trim()
+                    ? 'No "Participants" list found in the pasted text.'
+                    : ""}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                paddingHorizontal: 12,
+              }}
+            >
+              {parsedNames.map((name, index) => {
+                const isSelected = !deselected.has(index);
+                return (
+                  <TouchableOpacity
+                    key={`${name}-${index}`}
+                    testID={`import-reclub-participant-${index}`}
+                    onPress={() => toggleIndex(index)}
                     style={{
-                      flex: 1,
-                      color: isSelected
-                        ? theme.colors.onSurface
-                        : theme.colors.onSurfaceVariant,
+                      width: "33.333%",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 8,
+                      paddingVertical: 6,
+                      gap: 8,
                     }}
                   >
-                    {name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                    <MaterialCommunityIcons
+                      name={
+                        isSelected
+                          ? "checkbox-marked"
+                          : "checkbox-blank-outline"
+                      }
+                      size={18}
+                      color={
+                        isSelected
+                          ? theme.colors.primary
+                          : theme.colors.onSurfaceVariant
+                      }
+                    />
+                    <Text
+                      variant="bodyMedium"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{
+                        flex: 1,
+                        color: isSelected
+                          ? theme.colors.onSurface
+                          : theme.colors.onSurfaceVariant,
+                      }}
+                    >
+                      {name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </BottomSheetScrollView>
 
           <Divider />

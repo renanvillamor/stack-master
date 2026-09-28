@@ -8,15 +8,19 @@ import CourtPickerModal from "@/components/stack/CourtPickerModal";
 import MoveToStackDialog from "@/components/stack/MoveToStackDialog";
 import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
 import StackCard from "@/components/stack/StackCard";
+import GuestStackView from "@/components/stack/GuestStackView";
 import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
+import GuestSessionBanner from "@/components/session/GuestSessionBanner";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
 import { useQuorumStore } from "@/store/quorumStore";
+import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Player, PlayerRating, Stack } from "@/types";
 import { getStackGroup } from "@/utils/groupQueue";
 import { findLockedOutsideQuorum } from "@/utils/quorum";
+import { useIsSmallDevice, useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import React, { useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import { Button, Icon, IconButton, Text, useTheme } from "react-native-paper";
@@ -32,6 +36,8 @@ interface GroupColumnProps {
   canAutoFill?: boolean;
   onAutoFill?: () => void;
   testID?: string;
+  /** Forwarded to the internal FlatList so cards re-render when player data (e.g. a renamed player) changes without the stacks themselves changing. */
+  extraData?: unknown;
 }
 
 /** One half of the beginner/advanced split queue — its own header and independently scrolling list. */
@@ -45,6 +51,7 @@ function GroupColumn({
   canAutoFill,
   onAutoFill,
   testID,
+  extraData,
 }: GroupColumnProps) {
   const theme = useTheme();
   return (
@@ -106,6 +113,7 @@ function GroupColumn({
         data={stacks}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 12, gap: 12, flexGrow: 1 }}
+        extraData={extraData}
         renderItem={({ item }) => renderCard(item)}
         ListEmptyComponent={
           <View style={{ paddingVertical: 24, paddingHorizontal: 12 }}>
@@ -146,10 +154,11 @@ export default function StackScreen() {
   const { players, updatePlayerStatus } = usePlayerStore();
   const { quorums, createQuorum, removeQuorum, removeQuorumForStack } =
     useQuorumStore();
-  const { landscapeColumns, multiGroupStack } = useSettingsStore();
+  const { multiGroupStack } = useSettingsStore();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
-  const numColumns = isLandscape ? landscapeColumns : 1;
+  const numColumns = useResponsiveColumns();
+  const isSmallDevice = useIsSmallDevice();
 
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null);
   const [clearTarget, setClearTarget] = useState<string | null>(null);
@@ -188,6 +197,17 @@ export default function StackScreen() {
   const [quorumMemberConflict, setQuorumMemberConflict] = useState(false);
   const sheetRef = useRef<ActionBottomSheetRef>(null);
   const playerSheetRef = useRef<ActionBottomSheetRef>(null);
+  const theme = useTheme();
+
+  const role = useSessionStore((s) => s.role);
+  if (role === "guest") {
+    return (
+      <View className="flex-1 bg-app-bg pt-20">
+        <GuestSessionBanner />
+        <GuestStackView />
+      </View>
+    );
+  }
 
   const getPlayerName = (playerId: string) =>
     players.find((p) => p.id === playerId)?.name ?? "Unknown";
@@ -514,8 +534,6 @@ export default function StackScreen() {
         ]
       : queuedStacks;
 
-  const theme = useTheme();
-
   const suggestedNextStackId = getNextQueuedStack()?.id ?? null;
   // Multi-group stacking splits the queue into its own Beginners/Advanced
   // buttons (rendered per-column below) instead of one combined button.
@@ -608,7 +626,7 @@ export default function StackScreen() {
           <View
             style={{
               flex: 1,
-              flexDirection: "row",
+              flexDirection: isSmallDevice ? "column" : "row",
               paddingHorizontal: 8,
               paddingTop: 8,
             }}
@@ -623,13 +641,22 @@ export default function StackScreen() {
               canAutoFill={canAutoFillBeginner}
               onAutoFill={() => autoFillQueue("beginner")}
               testID="stack-autofill-beginner"
+              extraData={players}
             />
             <View
-              style={{
-                width: 1,
-                backgroundColor: theme.colors.outlineVariant,
-                marginHorizontal: 8,
-              }}
+              style={
+                isSmallDevice
+                  ? {
+                      height: 1,
+                      backgroundColor: theme.colors.outlineVariant,
+                      marginVertical: 8,
+                    }
+                  : {
+                      width: 1,
+                      backgroundColor: theme.colors.outlineVariant,
+                      marginHorizontal: 8,
+                    }
+              }
             />
             <GroupColumn
               title="Intermediate/Advanced"
@@ -641,6 +668,7 @@ export default function StackScreen() {
               canAutoFill={canAutoFillAdvanced}
               onAutoFill={() => autoFillQueue("advanced")}
               testID="stack-autofill-advanced"
+              extraData={players}
             />
           </View>
           {unsortedStacks.length > 0 && (
@@ -658,6 +686,7 @@ export default function StackScreen() {
                 backgroundColor={theme.colors.surfaceVariant}
                 stacks={unsortedStacks}
                 renderCard={renderStackCard}
+                extraData={players}
               />
             </View>
           )}
@@ -670,6 +699,7 @@ export default function StackScreen() {
           numColumns={numColumns}
           contentContainerStyle={{ padding: 16, gap: 10, flexGrow: 1 }}
           columnWrapperStyle={numColumns > 1 ? { gap: 10 } : undefined}
+          extraData={players}
           renderItem={({ item }) => {
             if ("_spacer" in item) return <View style={{ flex: 1 }} />;
             return <View style={{ flex: 1 }}>{renderStackCard(item)}</View>;
