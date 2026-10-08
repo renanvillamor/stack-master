@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { useTeamStore } from "@/store/teamStore";
 import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
+import Constants from "expo-constants";
 import React, { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import {
@@ -372,7 +373,7 @@ export default function SettingsScreen() {
               </View>
               <Divider />
               <List.Item
-                title="StackMaster v1.0.0"
+                title={`StackMaster v${Constants.expoConfig?.version ?? ""}`}
                 description="Pickleball stacking made easy"
                 left={(props) => (
                   <List.Icon
