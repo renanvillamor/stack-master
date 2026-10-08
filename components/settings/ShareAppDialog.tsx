@@ -24,7 +24,10 @@ export const APP_DOWNLOAD_URL =
 const RELEASES_API_URL =
   "https://api.github.com/repos/renanvillamor/stack-master/releases?per_page=100";
 
-/** Sums download_count over every asset of every release (unauthenticated: 60 req/hr per IP). */
+/**
+ * Sums download_count over every asset of every release (unauthenticated: 60 req/hr per IP).
+ * GitHub updates download_count lazily — expect ~10 min lag after a download.
+ */
 async function fetchTotalDownloads(): Promise<number> {
   const res = await fetch(RELEASES_API_URL, {
     headers: { Accept: "application/vnd.github+json" },
