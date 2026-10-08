@@ -2,6 +2,7 @@ import ImportReclubSheet, {
   ImportReclubSheetRef,
 } from "@/components/player/ImportReclubSheet";
 import SessionSyncSection from "@/components/settings/SessionSyncSection";
+import ShareAppDialog from "@/components/settings/ShareAppDialog";
 import TeamManagementModal from "@/components/team/TeamManagementModal";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -60,6 +61,7 @@ export default function SettingsScreen() {
   const { members: teamMembers } = useTeamStore();
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [teamManagementVisible, setTeamManagementVisible] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
   const importReclubSheetRef = useRef<ImportReclubSheetRef>(null);
 
   const activeTeamMembers = teamMembers.filter((m) => m.active);
@@ -355,17 +357,31 @@ export default function SettingsScreen() {
                 <TileDivider isSmallDevice={isSmallDevice} />
                 <List.Item
                   style={{ flex: 1 }}
-                  title="StackMaster v1.0.0"
-                  description="Pickleball stacking made easy"
+                  title="Share StackMaster"
+                  description="Show a QR code or send the download link"
                   left={(props) => (
                     <List.Icon
                       {...props}
-                      icon="tennis-ball"
+                      icon="share-variant-outline"
                       color={theme.colors.primary}
                     />
                   )}
+                  onPress={() => setShareVisible(true)}
+                  testID="settings-share-app"
                 />
               </View>
+              <Divider />
+              <List.Item
+                title="StackMaster v1.0.0"
+                description="Pickleball stacking made easy"
+                left={(props) => (
+                  <List.Icon
+                    {...props}
+                    icon="tennis-ball"
+                    color={theme.colors.primary}
+                  />
+                )}
+              />
             </Card>
           </View>
         </ScrollView>
@@ -377,6 +393,11 @@ export default function SettingsScreen() {
       />
 
       <ImportReclubSheet ref={importReclubSheetRef} />
+
+      <ShareAppDialog
+        visible={shareVisible}
+        onDismiss={() => setShareVisible(false)}
+      />
 
       <Portal>
         <Dialog

@@ -75,6 +75,7 @@ components/
   settings/
     SessionSyncSection.tsx         # Settings card: Host/Join controls, QR + code + live guest list while hosting
     JoinSessionModal.tsx           # QR scan (expo-camera, default step) / code entry fallback / guest-name prompt, 3-step dialog
+    ShareAppDialog.tsx             # QR + copyable direct-download link to the latest release's APK, native Share sheet, live download count
   Themed.tsx, StyledText.tsx, ExternalLink.tsx, EditScreenInfo.tsx,
   useColorScheme.ts(.web.ts), useClientOnlyValue.ts(.web.ts)
                                     # Expo-template scaffolding, only wired to app/modal.tsx — dead weight for
@@ -381,7 +382,7 @@ Full roster management: search, status filter, sort, multi-select bulk actions, 
 - **Stack Configuration**: Landscape Columns (`SegmentedButtons` 1/2/3) · Multiple Group Stack switch · Auto-Stack Players switch ("Stack players into win/lose stack on game end") · Shuffle Players switch ("Split winners & losers onto opposite teams").
 - **Live Sync** (`SessionSyncSection`): Host/Join controls — see "Session Sync" below. Only reachable when `role !== "guest"` (guests never see the Settings tab at all).
 - **Session**: Team Management (opens `TeamManagementModal`, backed by `teamStore`) · **New Session** (destructive confirm; dialog text appends "N active team member(s) will be loaded automatically" when applicable). On confirm: wipes `stackStore`, `playerStore`, `courtStore` (`clearAll()` each), then re-adds one player per **active** team-roster member (`addPlayer(m.name, m.rating)`).
-- **About**: static app version / coffee-link rows, not wired to anything.
+- **About**: static app version / coffee-link rows, not wired to anything · **Share StackMaster** opens `ShareAppDialog` — a QR code and copyable link to `APP_DOWNLOAD_URL` (`https://github.com/renanvillamor/stack-master/releases/latest/download/StackMaster.apk`, which GitHub redirects to the APK on the newest release — so **every release must attach the APK named exactly `StackMaster.apk`**) plus a "Share Link" button using React Native's `Share` API. On each open it fetches the GitHub Releases API (unauthenticated, 60 req/hr/IP) and shows the total `download_count` summed over all release assets as a pill; the pill is hidden if the fetch fails. Update the URL constants if the repo moves.
 
 ### `app/modal.tsx`
 
