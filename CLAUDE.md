@@ -34,7 +34,8 @@ Session Sync (see below) needs a Supabase project's `EXPO_PUBLIC_SUPABASE_URL`/`
 
 ```
 app/
-  _layout.tsx          # Root: GestureHandlerRootView > SafeAreaProvider > BottomSheetModalProvider > PaperProvider(lightTheme) > Router Stack
+  _layout.tsx          # Root: GestureHandlerRootView > SafeAreaProvider > ThemeProvider(lightTheme) > BottomSheetModalProvider > PaperProvider(lightTheme) > Router Stack
+                       #   (ThemeProvider is there because bottom sheets mount outside PaperProvider and would otherwise get Paper's default purple theme)
   modal.tsx             # Vestigial Expo-template scaffold screen — not reachable from the tab bar, not part of the real app
   (tabs)/
     _layout.tsx         # Bottom tab navigator: Court, Stack, Players, Settings
@@ -61,12 +62,14 @@ components/
     PlayerFormModal.tsx            # Add/edit player(s); comma-separated names = bulk add
     PlayerMatchHistoryDialog.tsx   # One player's match log
     PlayerStandingsDialog.tsx      # Leaderboard (wins desc, matches desc, name asc)
+    ImportReclubSheet.tsx          # Settings → Import from Reclub: paste a Reclub participant list to replace the roster
   stack/
     StackCard.tsx                  # Queue card: two teams, badges, Move to Court button
     CourtPickerModal.tsx           # Pick a destination court
     MoveToStackDialog.tsx          # Pick a destination queued stack for "Move to Stack"
     PlayerPickerDialog.tsx         # Generic "pick a player" grid, used by all swap flows
     GuestStackView.tsx             # Read-only Stack screen for guests, sourced from sessionStore.remoteSnapshot
+    AllMatchHistoryDialog.tsx      # Session-wide game log (newest first), opened from the Stack screen's history button
   team/
     TeamManagementModal.tsx        # Persistent "team roster" (separate from live players) used to seed a new session
     TeamMemberFormModal.tsx        # Add/edit team roster member(s)
@@ -101,6 +104,7 @@ utils/
   time.ts                   # formatLastPlayed() relative-time formatter
   sessionCode.ts             # generateSessionCode() — 6-char unambiguous session codes
   sessionSync.ts              # Supabase channel/presence/RPC wiring used by sessionStore
+  matchLog.ts                  # buildGameLog() — rebuilds whole games from per-player match histories; computeMatchLogStats() for the dialog's averages
 
 constants/Colors.ts     # Legacy Expo-template light/dark map — NOT the real palette (see Styling below)
 global.css               # Tailwind base/components/utilities
@@ -128,6 +132,15 @@ interface MatchRecord {
   result: MatchResult;
   teammateIds: string[];
   opponentIds: string[];
+  gameStartedAt?: string | null; // ISO; absent on records saved before durations were tracked
+}
+
+// Derived, never stored — one finished game rebuilt by utils/matchLog.ts
+interface GameLogEntry {
+  date: string; // ISO, when the game ended
+  gameStartedAt: string | null; // null for older records
+  winnerIds: string[];
+  loserIds: string[];
 }
 
 interface Player {
@@ -227,7 +240,7 @@ Cross-store reads use `useXStore.getState()` inside another store's action (e.g.
 
 - `addPlayer(name, rating)` — new player starts `status: "Available"`, `matches: 0`, empty history, unlocked.
 - `editPlayer(id, name, rating)`, `removePlayer(id)` (also frees the removed player's locked partner), `updatePlayerStatus(id, status)`.
-- `recordGameResult(id, result, teammateIds, opponentIds)` — increments `matches`, sets `lastPlayed`, appends a `MatchRecord`. Called once per player (not once per game) by the Court screen when a game ends.
+- `recordGameResult(id, result, teammateIds, opponentIds, gameStartedAt?)` — increments `matches`, sets `lastPlayed`, appends a `MatchRecord` (the Court screen passes the stack's `gameStartedAt` so game durations can be shown later). Called once per player (not once per game) by the Court screen when a game ends.
 - `lockPlayers(idA, idB)` / `unlockPlayer(id)` — session pairing (see "Locked pairs" below). Locking breaks either player's existing pairing first.
 - `clearAll()`.
 
@@ -320,6 +333,16 @@ A **quorum** is a saved set of exactly 4 player ids that should always end up pl
 
 **Quorums are one-shot**: the Court screen dissolves (`removeQuorum`) a quorum the instant its stack's game ends, _before_ re-routing players — a quorum does not automatically re-form after being consumed; the user must mark a new one.
 
+### `utils/matchLog.ts`
+
+There is no stored game log — each game is only written as 4 separate `MatchRecord`s (one per player, a few ms apart). `buildGameLog(players)` reconstructs games by normalizing every record into winners/losers and merging records with the same lineup within 60s, then sorts newest first. Both win and loss records are read, so a game still appears if some of its players were since deleted (their names render as "Removed player"). Games disappear on New Session / Import from Reclub, since those wipe `playerStore`.
+
+`computeMatchLogStats(players, games)` gives the averages shown at the top of `AllMatchHistoryDialog`. Each is `null` (shown as "—") when there's no data:
+
+- **Avg matches per player**: mean `history.length` over players with at least one game. Players who haven't played yet don't pull it down.
+- **Avg game time**: mean of `date − gameStartedAt` over games that recorded a start time.
+- **Avg player wait**: for each player, the gap from one game's end to the start (`gameStartedAt`) of their next game, averaged over all players. Time before a player's first game isn't counted, since no join time is tracked.
+
 ### `utils/time.ts`
 
 `formatLastPlayed(iso)` → `"Never"` (null/invalid) · `"Just now"` (≤0 min) · `"{n}m ago"` (<60 min) · `"{n}h ago"` (<24 hr) · `"{n}d ago"`. Used by `PlayerCard` and `StackCard`.
@@ -360,6 +383,7 @@ Manages the queue of unassigned stacks.
   - **Move to Stack** (`MoveToStackDialog`, lists non-quorum queued stacks excluding the source): if the player has a locked partner queued elsewhere, uses the pair-aware `movePlayerBetweenStacks` (shows an alert if there's no room for both); otherwise moves directly if there's room, or opens a cross-stack swap (`PlayerPickerDialog` → `swapPlayersBetweenStacks`) if the destination is full. "New Stack" preserves the source stack's `type`.
   - **Remove from Stack**: confirm dialog (warns if a locked partner will also be removed) → `removeSinglePlayerFromStack`, mark removed ids `"Available"`.
 - **Move to Court** (per-card, enabled only when full): 0 courts → auto-creates "Court 1" and assigns immediately; exactly 1 available court → assigns immediately, skipping the picker; otherwise `CourtPickerModal`. On selection: `assignCourtToStack` + mark all 4 players `"Playing"`.
+- **Toolbar row** (top): the auto-fill button (single-group mode, when available) plus a **history** icon button that opens `AllMatchHistoryDialog`. It starts with three stat tiles (avg matches per player, avg game time, avg player wait; see `computeMatchLogStats`), then lists every finished game this session, newest first, with the winning team in a green block, the losing team in a red block, the end time, and a Duration column computed as end time minus `gameStartedAt` (`buildGameLog`). Games recorded before durations were tracked show "—". Moving a game to another court restarts `gameStartedAt`, so its duration only counts time on the last court. Always shown, even when the queue is empty.
 - Empty state: "Stack is empty" — hint to long-press players on the Player tab.
 
 **Guest mode**: same pattern as the Court screen — `sessionStore.role === "guest"` renders `GuestSessionBanner` + `GuestStackView` instead, a read-only mirror (including the multi-group column split) sourced from `sessionStore.remoteSnapshot`.
@@ -381,8 +405,8 @@ Full roster management: search, status filter, sort, multi-select bulk actions, 
 
 - **Stack Configuration**: Landscape Columns (`SegmentedButtons` 1/2/3) · Multiple Group Stack switch · Auto-Stack Players switch ("Stack players into win/lose stack on game end") · Shuffle Players switch ("Split winners & losers onto opposite teams").
 - **Live Sync** (`SessionSyncSection`): Host/Join controls — see "Session Sync" below. Only reachable when `role !== "guest"` (guests never see the Settings tab at all).
-- **Session**: Team Management (opens `TeamManagementModal`, backed by `teamStore`) · **New Session** (destructive confirm; dialog text appends "N active team member(s) will be loaded automatically" when applicable). On confirm: wipes `stackStore`, `playerStore`, `courtStore` (`clearAll()` each), then re-adds one player per **active** team-roster member (`addPlayer(m.name, m.rating)`).
-- **About**: static app version / coffee-link rows, not wired to anything · **Share StackMaster** opens `ShareAppDialog` — a QR code and copyable link to `APP_DOWNLOAD_URL` (`https://github.com/renanvillamor/stack-master/releases/latest/download/StackMaster.apk`, which GitHub redirects to the APK on the newest release — so **every release must attach the APK named exactly `StackMaster.apk`**) plus a "Share Link" button using React Native's `Share` API. On each open it fetches the GitHub Releases API (unauthenticated, 60 req/hr/IP) and shows the total `download_count` summed over all release assets as a pill (GitHub updates this count with a ~10 min lag, so a fresh download won't show immediately); the pill is hidden if the fetch fails. Update the URL constants if the repo moves.
+- **Session**: Team Management (opens `TeamManagementModal`, backed by `teamStore`) · **New Session** (destructive confirm; dialog text appends "N active team member(s) will be loaded automatically" when applicable). On confirm: wipes `stackStore`, `quorumStore`, `playerStore`, `courtStore` (`clearAll()` each), then re-adds one player per **active** team-roster member (`addPlayer(m.name, m.rating)`) · **Import from Reclub** (`ImportReclubSheet`): parses a pasted Reclub "Participants" list (`utils/reclub.ts`, first word of each name), then wipes `stackStore`/`quorumStore`/`playerStore` (courts kept) and adds the selected names as `"NR"` players. Its input is a `BottomSheetTextInput` left deliberately uncontrolled. A controlled input garbles typed text on Android.
+- **About**: four tiles in this order — Buy me a Coffee (static, not wired) · `StackMaster v{version}` (from `Constants.expoConfig.version`) · Share StackMaster · Update Version. They render as a 2×2 grid on tablets and a single column on phones (`TileDivider`). **Update Version** fetches the latest GitHub release (`utils/appUpdate.ts`: `fetchLatestReleaseVersion` strips the tag's `v`; `isNewerVersion` compares numerically and pads missing parts, so tag `v1.1` equals app `1.1.0`). If newer, a `ConfirmDialog` opens `APP_DOWNLOAD_URL` in the browser to download the APK; otherwise an `AlertDialog` says it's up to date or that the check failed. Release tags must stay numeric-dotted (`vX.Y[.Z]`) for this compare to work. **Share StackMaster** opens `ShareAppDialog` — a QR code and copyable link to `APP_DOWNLOAD_URL` (`https://github.com/renanvillamor/stack-master/releases/latest/download/StackMaster.apk`, which GitHub redirects to the APK on the newest release — so **every release must attach the APK named exactly `StackMaster.apk`**) plus a "Share Link" button using React Native's `Share` API. On each open it fetches the GitHub Releases API (unauthenticated, 60 req/hr/IP) and shows the total `download_count` summed over all release assets as a pill (GitHub updates this count with a ~10 min lag, so a fresh download won't show immediately); the pill is hidden if the fetch fails. Update the URL constants if the repo moves.
 
 ### `app/modal.tsx`
 

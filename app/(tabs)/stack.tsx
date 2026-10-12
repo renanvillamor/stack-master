@@ -10,6 +10,7 @@ import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
 import StackCard from "@/components/stack/StackCard";
 import GuestStackView from "@/components/stack/GuestStackView";
 import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
+import AllMatchHistoryDialog from "@/components/stack/AllMatchHistoryDialog";
 import GuestSessionBanner from "@/components/session/GuestSessionBanner";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -179,6 +180,7 @@ export default function StackScreen() {
     playerId: string;
   } | null>(null);
   const [historyPlayer, setHistoryPlayer] = useState<Player | null>(null);
+  const [allHistoryVisible, setAllHistoryVisible] = useState(false);
   const [moveToStackDialog, setMoveToStackDialog] = useState<{
     fromStackId: string;
     playerId: string;
@@ -612,13 +614,37 @@ export default function StackScreen() {
 
   return (
     <View className="flex-1 bg-app-bg pt-20">
-      {canAutoFill && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}>
-          <Button mode="contained-tonal" icon="auto-fix" onPress={() => autoFillQueue()} testID="stack-autofill">
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 8,
+          paddingHorizontal: 16,
+          paddingTop: 4,
+          paddingBottom: 8,
+        }}
+      >
+        {canAutoFill && (
+          <Button
+            mode="contained-tonal"
+            icon="auto-fix"
+            onPress={() => autoFillQueue()}
+            style={{ flex: 1 }}
+            testID="stack-autofill"
+          >
             Auto-fill vacant slots
           </Button>
-        </View>
-      )}
+        )}
+        <IconButton
+          icon="history"
+          size={22}
+          onPress={() => setAllHistoryVisible(true)}
+          iconColor={theme.colors.primary}
+          style={{ backgroundColor: theme.colors.primaryContainer, margin: 0 }}
+          testID="stack-match-history-button"
+        />
+      </View>
       {queuedStacks.length === 0 ? (
         emptyQueueState
       ) : multiGroupStack ? (
@@ -741,6 +767,12 @@ export default function StackScreen() {
         player={historyPlayer}
         getPlayerName={getPlayerName}
         onDismiss={() => setHistoryPlayer(null)}
+      />
+
+      <AllMatchHistoryDialog
+        visible={allHistoryVisible}
+        players={players}
+        onDismiss={() => setAllHistoryVisible(false)}
       />
 
       <PlayerPickerDialog

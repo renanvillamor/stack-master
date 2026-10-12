@@ -170,6 +170,7 @@ export default function CourtScreen() {
         "win",
         winnerIds.filter((w) => w !== id),
         loserIds,
+        stack.gameStartedAt,
       ),
     );
     loserIds.forEach((id) =>
@@ -178,6 +179,7 @@ export default function CourtScreen() {
         "loss",
         loserIds.filter((l) => l !== id),
         winnerIds,
+        stack.gameStartedAt,
       ),
     );
 

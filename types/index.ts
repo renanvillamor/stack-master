@@ -23,6 +23,16 @@ export interface MatchRecord {
   result: MatchResult;
   teammateIds: string[];
   opponentIds: string[];
+  gameStartedAt?: string | null; // ISO; absent on records saved before durations were tracked
+}
+
+// One finished game, reconstructed from the 4 players' MatchRecords (there is
+// no separate game log — see utils/matchLog.ts).
+export interface GameLogEntry {
+  date: string; // ISO string — when the game ended
+  gameStartedAt: string | null; // null when unknown (older records)
+  winnerIds: string[];
+  loserIds: string[];
 }
 
 export interface Player {

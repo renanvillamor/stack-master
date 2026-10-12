@@ -18,6 +18,7 @@ interface PlayerState {
     result: MatchResult,
     teammateIds: string[],
     opponentIds: string[],
+    gameStartedAt?: string | null,
   ) => void;
   /** Locks two players together for the session, breaking either one's existing pairing first. */
   lockPlayers: (idA: string, idB: string) => void;
@@ -72,7 +73,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (player) player.status = status;
         }),
 
-      recordGameResult: (id, result, teammateIds, opponentIds) =>
+      recordGameResult: (id, result, teammateIds, opponentIds, gameStartedAt) =>
         set((state) => {
           const player = state.players.find((p) => p.id === id);
           if (player) {
@@ -83,6 +84,7 @@ export const usePlayerStore = create<PlayerState>()(
               result,
               teammateIds,
               opponentIds,
+              gameStartedAt: gameStartedAt ?? null,
             });
           }
         }),

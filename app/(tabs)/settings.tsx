@@ -2,18 +2,25 @@ import ImportReclubSheet, {
   ImportReclubSheetRef,
 } from "@/components/player/ImportReclubSheet";
 import SessionSyncSection from "@/components/settings/SessionSyncSection";
-import ShareAppDialog from "@/components/settings/ShareAppDialog";
+import AlertDialog from "@/components/common/AlertDialog";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
+import ShareAppDialog, {
+  APP_DOWNLOAD_URL,
+} from "@/components/settings/ShareAppDialog";
 import TeamManagementModal from "@/components/team/TeamManagementModal";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { useTeamStore } from "@/store/teamStore";
 import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
+import { fetchLatestReleaseVersion, isNewerVersion } from "@/utils/appUpdate";
 import Constants from "expo-constants";
 import React, { useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import {
+  ActivityIndicator,
   Button,
   Card,
   Dialog,
@@ -59,16 +66,50 @@ export default function SettingsScreen() {
   const { clearAll: clearPlayers, addPlayer } = usePlayerStore();
   const { clearAll: clearCourts } = useCourtStore();
   const { clearAll: clearStacks } = useStackStore();
+  const { clearAll: clearQuorums } = useQuorumStore();
   const { members: teamMembers } = useTeamStore();
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [teamManagementVisible, setTeamManagementVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  // Newest release version when it's newer than this build — drives the download prompt.
+  const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
+  const [updateNotice, setUpdateNotice] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
   const importReclubSheetRef = useRef<ImportReclubSheetRef>(null);
+
+  const appVersion = Constants.expoConfig?.version ?? "";
+
+  const handleCheckForUpdate = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      const latest = await fetchLatestReleaseVersion();
+      if (isNewerVersion(latest, appVersion)) {
+        setAvailableUpdate(latest);
+      } else {
+        setUpdateNotice({
+          title: "You're up to date",
+          message: `StackMaster v${appVersion} is the latest version.`,
+        });
+      }
+    } catch {
+      setUpdateNotice({
+        title: "Couldn't check for updates",
+        message: "Check your internet connection and try again.",
+      });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   const activeTeamMembers = teamMembers.filter((m) => m.active);
 
   const handleNewSession = () => {
     clearStacks();
+    clearQuorums();
     clearPlayers();
     clearCourts();
     activeTeamMembers.forEach((m) => addPlayer(m.name, m.rating));
@@ -358,6 +399,21 @@ export default function SettingsScreen() {
                 <TileDivider isSmallDevice={isSmallDevice} />
                 <List.Item
                   style={{ flex: 1 }}
+                  title={`StackMaster v${appVersion}`}
+                  description="Pickleball stacking made easy"
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon="tennis-ball"
+                      color={theme.colors.primary}
+                    />
+                  )}
+                />
+              </View>
+              <Divider />
+              <View style={{ flexDirection: isSmallDevice ? "column" : "row" }}>
+                <List.Item
+                  style={{ flex: 1 }}
                   title="Share StackMaster"
                   description="Show a QR code or send the download link"
                   left={(props) => (
@@ -370,19 +426,32 @@ export default function SettingsScreen() {
                   onPress={() => setShareVisible(true)}
                   testID="settings-share-app"
                 />
+                <TileDivider isSmallDevice={isSmallDevice} />
+                <List.Item
+                  style={{ flex: 1 }}
+                  title="Update Version"
+                  description={
+                    checkingUpdate
+                      ? "Checking for updates…"
+                      : "Check for and download the latest version"
+                  }
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon="update"
+                      color={theme.colors.primary}
+                    />
+                  )}
+                  right={(props) =>
+                    checkingUpdate ? (
+                      <ActivityIndicator {...props} size="small" />
+                    ) : null
+                  }
+                  onPress={handleCheckForUpdate}
+                  disabled={checkingUpdate}
+                  testID="settings-update-version"
+                />
               </View>
-              <Divider />
-              <List.Item
-                title={`StackMaster v${Constants.expoConfig?.version ?? ""}`}
-                description="Pickleball stacking made easy"
-                left={(props) => (
-                  <List.Icon
-                    {...props}
-                    icon="tennis-ball"
-                    color={theme.colors.primary}
-                  />
-                )}
-              />
             </Card>
           </View>
         </ScrollView>
@@ -398,6 +467,26 @@ export default function SettingsScreen() {
       <ShareAppDialog
         visible={shareVisible}
         onDismiss={() => setShareVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={!!availableUpdate}
+        title="Update Available"
+        message={`StackMaster v${availableUpdate ?? ""} is available (you have v${appVersion}). Download the new APK now?`}
+        confirmLabel="Download"
+        destructive={false}
+        onConfirm={() => {
+          setAvailableUpdate(null);
+          Linking.openURL(APP_DOWNLOAD_URL);
+        }}
+        onDismiss={() => setAvailableUpdate(null)}
+      />
+
+      <AlertDialog
+        visible={!!updateNotice}
+        title={updateNotice?.title ?? ""}
+        message={updateNotice?.message ?? ""}
+        onDismiss={() => setUpdateNotice(null)}
       />
 
       <Portal>
