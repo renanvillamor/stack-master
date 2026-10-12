@@ -5,7 +5,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { PaperProvider } from "react-native-paper";
+import { PaperProvider, ThemeProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import "react-native-url-polyfill/auto";
 import "../global.css";
@@ -25,13 +25,20 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <BottomSheetModalProvider>
-          <PaperProvider theme={lightTheme}>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-          </PaperProvider>
-        </BottomSheetModalProvider>
+        {/* Bottom sheets mount at BottomSheetModalProvider's host, outside
+            PaperProvider, so they'd fall back to Paper's default (purple)
+            theme. ThemeProvider supplies just the theme up here; PaperProvider
+            stays inside so its Portal host keeps the existing sheet/dialog
+            stacking order. */}
+        <ThemeProvider theme={lightTheme}>
+          <BottomSheetModalProvider>
+            <PaperProvider theme={lightTheme}>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+            </PaperProvider>
+          </BottomSheetModalProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

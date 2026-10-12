@@ -1,5 +1,6 @@
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { usePlayerStore } from "@/store/playerStore";
+import { useQuorumStore } from "@/store/quorumStore";
 import { useStackStore } from "@/store/stackStore";
 import { parseReclubParticipants } from "@/utils/reclub";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -7,6 +8,7 @@ import {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
+  BottomSheetTextInput,
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
@@ -19,7 +21,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { TextInput, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { Button, Divider, Text, useTheme } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -37,8 +39,10 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   const sheetRef = useRef<BottomSheetModal>(null);
   const { addPlayer, clearAll: clearPlayers } = usePlayerStore();
   const { clearAll: clearStacks } = useStackStore();
+  const { clearAll: clearQuorums } = useQuorumStore();
 
   const [text, setText] = useState("");
+  const [inputKey, setInputKey] = useState(0);
   const [deselected, setDeselected] = useState<Set<number>>(new Set());
   const [pendingNames, setPendingNames] = useState<string[] | null>(null);
 
@@ -81,6 +85,8 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   const handleConfirmImport = () => {
     if (!pendingNames) return;
     clearStacks();
+    // Quorums reference player ids, so they'd dangle once the roster is replaced.
+    clearQuorums();
     clearPlayers();
     pendingNames.forEach((name) => addPlayer(name, "NR"));
     setPendingNames(null);
@@ -88,6 +94,7 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
 
   const handleReset = () => {
     setText("");
+    setInputKey((k) => k + 1);
     setDeselected(new Set());
   };
 
@@ -144,8 +151,14 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
             <Divider />
 
             <View style={{ padding: 20, paddingBottom: 12 }}>
-              <TextInput
-                value={text}
+              {/* BottomSheetTextInput, not RN's TextInput, so the sheet's
+                  keyboard handling cooperates with it. Deliberately
+                  uncontrolled (no `value`): echoing every keystroke back
+                  through this heavy re-render (parse + chip list) races the
+                  native input on Android and jumps the cursor, garbling
+                  typed text. handleReset remounts it via `inputKey`. */}
+              <BottomSheetTextInput
+                key={inputKey}
                 onChangeText={setText}
                 placeholder="Paste Reclub data here..."
                 placeholderTextColor={theme.colors.onSurfaceVariant}
