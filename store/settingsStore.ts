@@ -1,3 +1,4 @@
+import { AnnouncerVoice } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -15,6 +16,17 @@ interface SettingsState {
   /** Speak match call-outs aloud (StackCard announce button + auto-announce on court assignment). */
   matchAnnouncer: boolean;
   toggleMatchAnnouncer: () => void;
+  /** null = the phone's default voice. Label is kept so Settings can show it without querying the engine. */
+  announcerVoice: Pick<AnnouncerVoice, "id" | "label"> | null;
+  setAnnouncerVoice: (
+    voice: Pick<AnnouncerVoice, "id" | "label"> | null,
+  ) => void;
+  /** expo-speech rate; 1.0 = engine normal. */
+  announcerRate: number;
+  setAnnouncerRate: (rate: number) => void;
+  /** expo-speech pitch; 1.0 = engine normal. */
+  announcerPitch: number;
+  setAnnouncerPitch: (pitch: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -53,6 +65,27 @@ export const useSettingsStore = create<SettingsState>()(
       toggleMatchAnnouncer: () =>
         set((state) => {
           state.matchAnnouncer = !state.matchAnnouncer;
+        }),
+
+      announcerVoice: null,
+
+      setAnnouncerVoice: (voice) =>
+        set((state) => {
+          state.announcerVoice = voice;
+        }),
+
+      announcerRate: 0.9,
+
+      setAnnouncerRate: (rate) =>
+        set((state) => {
+          state.announcerRate = rate;
+        }),
+
+      announcerPitch: 1.0,
+
+      setAnnouncerPitch: (pitch) =>
+        set((state) => {
+          state.announcerPitch = pitch;
         }),
     })),
     {

@@ -10,11 +10,7 @@ export interface Court {
 export type PlayerRating = number | "NR";
 
 export type PlayerStatus =
-  | "Available"
-  | "Idle"
-  | "Stacked"
-  | "Playing"
-  | "Inactive";
+  "Available" | "Idle" | "Stacked" | "Playing" | "Inactive";
 
 export type MatchResult = "win" | "loss";
 
@@ -81,6 +77,16 @@ export interface Settings {
   shufflePlayers: boolean;
   autoStackPlayers: boolean;
   multiGroupStack: boolean;
+}
+
+// A text-to-speech voice installed on this device, as shown in the announcer
+// voice picker. `id` is the engine's voice identifier passed to expo-speech.
+export interface AnnouncerVoice {
+  id: string;
+  label: string; // e.g. "English (US) · Voice 2"
+  language: string; // e.g. "en-US"
+  online: boolean; // needs internet to speak (Android "-network" voices)
+  enhanced: boolean; // engine reports higher-than-normal quality
 }
 
 // ─── Quorum ──────────────────────────────────────────────────────────────────

@@ -48,6 +48,26 @@ const TEAM1_COLOR = "#DC2626"; // red
 const TEAM2_COLOR = "#1D4ED8"; // blue
 const REPEAT_WARNING_COLOR = "#B45309"; // amber-700
 
+/** Queue badge colors by stack type (gray / green / red): the badge color alone marks winner/loser stacks. */
+const TYPE_BADGE: Record<
+  Stack["type"],
+  { bg: string; fg: string; icon?: string; label: string }
+> = {
+  default: { bg: "#E5E7EB", fg: "#374151", label: "Stack" },
+  winners: {
+    bg: "#BBF7D0",
+    fg: "#166534",
+    icon: "trophy",
+    label: "Winners stack",
+  },
+  losers: {
+    bg: "#FECACA",
+    fg: "#991B1B",
+    icon: "refresh",
+    label: "Losers stack",
+  },
+};
+
 function formatRating(rating: PlayerRating): string {
   return rating === "NR" ? "NR" : rating.toFixed(1);
 }
@@ -273,6 +293,7 @@ export default function StackCard({
   const totalPlayers =
     stack.team1.playerIds.length + stack.team2.playerIds.length;
   const isFull = totalPlayers === 4;
+  const typeBadge = TYPE_BADGE[stack.type];
 
   /**
    * A full team's two players flagged as a repeat combo when they're not
@@ -310,59 +331,43 @@ export default function StackCard({
       <View className="px-4 pt-3 pb-3">
         {/* Header */}
         <View className="flex-row items-center mb-3">
-          {/* Queue position badge */}
-          {showLabel && (
+          {/* Queue badge — colored by stack type (winners yellow, losers
+              red). Shows the queue position when showLabel is on; in group
+              columns (no position) only winner/loser stacks get a badge, with
+              an icon in place of the number. */}
+          {(showLabel || stack.type !== "default") && (
             <View
+              accessibilityLabel={
+                showLabel ? `${typeBadge.label} ${index}` : typeBadge.label
+              }
+              testID={`stack-card-badge-${stack.id}`}
               style={{
                 width: 26,
                 height: 26,
                 borderRadius: 13,
-                backgroundColor: theme.colors.primaryContainer,
+                backgroundColor: typeBadge.bg,
                 alignItems: "center",
                 justifyContent: "center",
-                marginRight: 8,
               }}
             >
-              <Text
-                variant="labelSmall"
-                style={{
-                  color: theme.colors.onPrimaryContainer,
-                  fontWeight: "700",
-                  fontSize: 11,
-                }}
-              >
-                {index}
-              </Text>
+              {showLabel ? (
+                <Text
+                  variant="labelSmall"
+                  style={{
+                    color: typeBadge.fg,
+                    fontWeight: "700",
+                    fontSize: 11,
+                  }}
+                >
+                  {index}
+                </Text>
+              ) : (
+                <Icon source={typeBadge.icon!} size={14} color={typeBadge.fg} />
+              )}
             </View>
           )}
 
-          <View className="flex-1 flex-row items-center gap-2">
-            {showLabel && (
-              <Text variant="titleSmall" style={{ fontWeight: "700" }}>
-                Stack
-              </Text>
-            )}
-            {stack.type === "winners" && (
-              <Chip
-                compact
-                icon="trophy-outline"
-                style={{ backgroundColor: "#FEF9C3" }}
-                textStyle={{ color: "#854D0E", fontSize: 11 }}
-              >
-                Winners
-              </Chip>
-            )}
-            {stack.type === "losers" && (
-              <Chip
-                compact
-                icon="refresh"
-                style={{ backgroundColor: "#FEE2E2" }}
-                textStyle={{ color: "#991B1B", fontSize: 11 }}
-              >
-                Losers
-              </Chip>
-            )}
-          </View>
+          <View className="flex-1" />
 
           {/* Time since the stack was created */}
           <View

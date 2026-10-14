@@ -4,6 +4,7 @@ import ImportReclubSheet, {
 import SessionSyncSection from "@/components/settings/SessionSyncSection";
 import AlertDialog from "@/components/common/AlertDialog";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import AnnouncerVoiceDialog from "@/components/settings/AnnouncerVoiceDialog";
 import ShareAppDialog, {
   APP_DOWNLOAD_URL,
 } from "@/components/settings/ShareAppDialog";
@@ -64,6 +65,9 @@ export default function SettingsScreen() {
     toggleMultiGroupStack,
     matchAnnouncer,
     toggleMatchAnnouncer,
+    announcerVoice,
+    announcerRate,
+    announcerPitch,
   } = useSettingsStore();
   const { clearAll: clearPlayers, addPlayer } = usePlayerStore();
   const { clearAll: clearCourts } = useCourtStore();
@@ -73,6 +77,13 @@ export default function SettingsScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [teamManagementVisible, setTeamManagementVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [voiceDialogVisible, setVoiceDialogVisible] = useState(false);
+
+  /** Turning the announcer on goes straight into its settings so the host can pick a voice. */
+  const handleMatchAnnouncerToggle = () => {
+    if (!matchAnnouncer) setVoiceDialogVisible(true);
+    toggleMatchAnnouncer();
+  };
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   // Newest release version when it's newer than this build — drives the download prompt.
   const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
@@ -301,10 +312,31 @@ export default function SettingsScreen() {
                 />
               </View>
               <Divider />
+              {/* One tile: the switch turns the announcer on/off; turning it on (or
+                  tapping the tile while on) opens the voice/speed/pitch dialog. */}
               <List.Item
                 title="Match Announcer"
-                description="Announce matches aloud with an announce button on each stack and when a stack moves to a court. Off: the host calls matches"
-                descriptionNumberOfLines={3}
+                description={
+                  matchAnnouncer
+                    ? [
+                        announcerVoice?.label ?? "Phone default voice",
+                        announcerRate === 0.9
+                          ? null
+                          : announcerRate < 0.9
+                            ? "slow"
+                            : "fast",
+                        announcerPitch === 1
+                          ? null
+                          : announcerPitch < 1
+                            ? "low pitch"
+                            : "high pitch",
+                        "tap to change",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Call matches out loud. Off: the host calls them"
+                }
+                descriptionNumberOfLines={2}
                 left={(props) => (
                   <List.Icon
                     {...props}
@@ -315,11 +347,15 @@ export default function SettingsScreen() {
                 right={() => (
                   <Switch
                     value={matchAnnouncer}
-                    onValueChange={toggleMatchAnnouncer}
+                    onValueChange={handleMatchAnnouncerToggle}
                     color={theme.colors.primary}
                     testID="settings-match-announcer-switch"
                   />
                 )}
+                onPress={
+                  matchAnnouncer ? () => setVoiceDialogVisible(true) : undefined
+                }
+                testID="settings-match-announcer"
               />
             </Card>
 
@@ -486,6 +522,11 @@ export default function SettingsScreen() {
       />
 
       <ImportReclubSheet ref={importReclubSheetRef} />
+
+      <AnnouncerVoiceDialog
+        visible={voiceDialogVisible}
+        onDismiss={() => setVoiceDialogVisible(false)}
+      />
 
       <ShareAppDialog
         visible={shareVisible}
