@@ -18,6 +18,7 @@ StackMaster is an Expo React Native app for running pickleball "stacking" sessio
 | Dates         | `date-fns`                                                                             |
 | Realtime sync | Supabase (`@supabase/supabase-js`) — see "Session Sync" below                          |
 | QR codes      | `react-native-qrcode-svg` (generate) + `expo-camera` (scan)                            |
+| Text-to-speech | `expo-speech` (device's built-in TTS voice, offline) — Match Announcer               |
 | Language      | TypeScript (`strict: true`)                                                            |
 
 Path alias: **`@/*` → repo root** (`tsconfig.json`). Always import via `@/store/...`, `@/components/...`, `@/utils/...`, `@/types`, never relative paths across top-level folders.
@@ -105,6 +106,7 @@ utils/
   sessionCode.ts             # generateSessionCode() — 6-char unambiguous session codes
   sessionSync.ts              # Supabase channel/presence/RPC wiring used by sessionStore
   matchLog.ts                  # buildGameLog() — rebuilds whole games from per-player match histories; computeMatchLogStats() for the dialog's averages
+  announcer.ts                 # buildMatchAnnouncement()/announceMatch() — Match Announcer call-outs via expo-speech
 
 constants/Colors.ts     # Legacy Expo-template light/dark map — NOT the real palette (see Styling below)
 global.css               # Tailwind base/components/utilities
@@ -254,6 +256,7 @@ Cross-store reads use `useXStore.getState()` inside another store's action (e.g.
 - `autoStackPlayers` (default `true`) — on game end, automatically re-queue players into winner/loser stacks; when off, players just go back to `"Available"` and the game stack is discarded.
 - `landscapeColumns: 1 | 2 | 3` (default `2`) — grid column count in landscape for Court/Player/single-group-Stack screens.
 - `multiGroupStack` (default `true`) — splits the Stack screen into separate Beginner/Advanced queues (see "Multi-group stacking").
+- `matchAnnouncer` (default `false`) — speaks match call-outs aloud (see "Match Announcer"). Per-device, not part of the synced `SessionSnapshot`.
 
 ### `store/teamStore.ts`
 
@@ -343,11 +346,15 @@ There is no stored game log — each game is only written as 4 separate `MatchRe
 - **Avg game time**: mean of `date − gameStartedAt` over games that recorded a start time.
 - **Avg player wait**: for each player, the gap from one game's end to the start (`gameStartedAt`) of their next game, averaged over all players. Time before a player's first game isn't counted, since no join time is tracked.
 
+### `utils/announcer.ts`
+
+`buildMatchAnnouncement(stack, getPlayerName, courtName)` → `"Next Match: A and B versus C and D. Please proceed to Court 1."` (team1 then team2). With `courtName === null` the last sentence becomes "Please get ready for the next available court." `announceMatch(...)` calls `Speech.stop()` first so a new call-out cuts off one still playing, then speaks at rate 0.9.
+
 ### `utils/time.ts`
 
 `formatLastPlayed(iso)` → `"Never"` (null/invalid) · `"Just now"` (≤0 min) · `"{n}m ago"` (<60 min) · `"{n}h ago"` (<24 hr) · `"{n}d ago"`. Used by `PlayerCard` and `StackCard`.
 
-> **Known duplication**: `StackCard.tsx` implements its own near-identical `formatElapsed` for a stack's "created N ago" footer instead of reusing `formatLastPlayed` — formatting differs slightly (e.g. `"1 hr ago"` vs `"1h ago"`). If you touch relative-time formatting, update both or consolidate them.
+> **Known duplication**: `StackCard.tsx` implements its own near-identical `formatElapsed` for the "created N ago" time in a stack card's header (left of the Up Next/Pinned/Quorum/Ready chips) instead of reusing `formatLastPlayed` — formatting differs slightly (e.g. `"1 hr ago"` vs `"1h ago"`). If you touch relative-time formatting, update both or consolidate them.
 
 ---
 
@@ -360,6 +367,7 @@ All four tab screens share a layout skeleton: `FlatList` of cards + a `numColumn
 Shows every court as a `CourtCard`: name, live elapsed-game timer (re-renders every 30s), both teams or dashed "Empty" slots, and an **END GAME** button (disabled unless a stack is assigned).
 
 - **⋮ court menu**: Edit (`CourtFormModal`) · Move to Court (only if active — reassign the running game to a different empty court via `CourtPickerModal`) · Back to Stack (only if active — `returnStackToQueue`, marks the 4 players `"Stacked"`, runs `checkQuorumsForPlayers`) · Delete (destructive `ConfirmDialog` → `removeCourt`).
+- **Announce** (bullhorn `IconButton` to the left of END GAME, rendered only when `matchAnnouncer` is on, disabled when the court has no game): speaks the running game's call-out with this court's name. `CourtCard.onAnnounce` is three-state: `undefined` hides the button, `null` shows it disabled, and a function enables it.
 - **Tap a player row**: "Switch Team" action — locked players can't switch; if the other team has no unlocked candidate, shows an alert; otherwise opens `PlayerPickerDialog` → `swapPlayersBetweenTeams`.
 - **FAB**: `CourtFormModal` with `defaultName="Court {n+1}"`.
 - **END GAME flow** (`WinnerDialog` → pick winning team):
@@ -367,7 +375,7 @@ Shows every court as a `CourtCard`: name, live elapsed-game timer (re-renders ev
   2. Dissolve any quorum tied to this stack (`getQuorumForStack` → `removeQuorum`) — before re-routing.
   3. If `autoStackPlayers` is on: mark all 4 `"Stacked"`, call `processGameResult(stackId, winnerIds, loserIds, shufflePlayers)` (see stackStore); any locked partner pulled in also gets marked `"Stacked"`. If off: mark all 4 `"Available"` and just `removeStack(stackId)` (no re-queue).
   4. `checkQuorumsForPlayers(allIds)` — let any quorum touching these players try to reassemble.
-  5. Look at `getNextQueuedStack()`: if full, show `NextStackPromptDialog` (offer to move it onto the just-freed court, via `assignCourtToStack` + mark 4 players `"Playing"`); if not full, show `IncompleteStackPromptDialog` offering either "Move Next Available Stack" (`getSuggestedNextStack()` — a looser, oldest-_ready_ search) or "Complete This Stack" (navigates to the Stack tab).
+  5. Look at `getNextQueuedStack()`: if full, show `NextStackPromptDialog` (offer to move it onto the just-freed court, via `assignCourtToStack` + mark 4 players `"Playing"`, then announce it with that court's name when `matchAnnouncer` is on); if not full, show `IncompleteStackPromptDialog` offering either "Move Next Available Stack" (`getSuggestedNextStack()` — a looser, oldest-_ready_ search) or "Complete This Stack" (navigates to the Stack tab).
 
 **Guest mode**: if `sessionStore.role === "guest"`, the screen renders `GuestSessionBanner` + `GuestCourtView` instead of the above — a read-only mirror sourced from `sessionStore.remoteSnapshot` (see "Session Sync" below). The early return sits after all hooks, before the host-only handlers/derived state.
 
@@ -382,7 +390,8 @@ Manages the queue of unassigned stacks.
 - **Tap a player avatar** → Switch Team / Match History (`PlayerMatchHistoryDialog`, same as the Player tab) / Move to Stack / Remove from Stack (the latter two disabled if the stack is a quorum's stack).
   - **Move to Stack** (`MoveToStackDialog`, lists non-quorum queued stacks excluding the source): if the player has a locked partner queued elsewhere, uses the pair-aware `movePlayerBetweenStacks` (shows an alert if there's no room for both); otherwise moves directly if there's room, or opens a cross-stack swap (`PlayerPickerDialog` → `swapPlayersBetweenStacks`) if the destination is full. "New Stack" preserves the source stack's `type`.
   - **Remove from Stack**: confirm dialog (warns if a locked partner will also be removed) → `removeSinglePlayerFromStack`, mark removed ids `"Available"`.
-- **Move to Court** (per-card, enabled only when full): 0 courts → auto-creates "Court 1" and assigns immediately; exactly 1 available court → assigns immediately, skipping the picker; otherwise `CourtPickerModal`. On selection: `assignCourtToStack` + mark all 4 players `"Playing"`.
+- **Move to Court** (per-card, enabled only when full): 0 courts → auto-creates "Court 1" and assigns immediately; exactly 1 available court → assigns immediately, skipping the picker; otherwise `CourtPickerModal`. On selection: `assignCourtToStack` + mark all 4 players `"Playing"`, then announce the match with the chosen court's name if `matchAnnouncer` is on.
+- **Announce** (bullhorn `IconButton` to the left of Move to Court, rendered only when `matchAnnouncer` is on, enabled only when full): speaks the stack's call-out naming the first free court (`availableCourts[0]`), or "next available court" if every court is busy. Doesn't move the stack or change any statuses.
 - **Toolbar row** (top): the auto-fill button (single-group mode, when available) plus a **history** icon button that opens `AllMatchHistoryDialog`. It starts with three stat tiles (avg matches per player, avg game time, avg player wait; see `computeMatchLogStats`), then lists every finished game this session, newest first, with the winning team in a green block, the losing team in a red block, the end time, and a Duration column computed as end time minus `gameStartedAt` (`buildGameLog`). Games recorded before durations were tracked show "—". Moving a game to another court restarts `gameStartedAt`, so its duration only counts time on the last court. Always shown, even when the queue is empty.
 - Empty state: "Stack is empty" — hint to long-press players on the Player tab.
 
@@ -403,7 +412,7 @@ Full roster management: search, status filter, sort, multi-select bulk actions, 
 
 ### Settings screen (`app/(tabs)/settings.tsx`)
 
-- **Stack Configuration**: Landscape Columns (`SegmentedButtons` 1/2/3) · Multiple Group Stack switch · Auto-Stack Players switch ("Stack players into win/lose stack on game end") · Shuffle Players switch ("Split winners & losers onto opposite teams").
+- **Stack Configuration**: Landscape Columns (`SegmentedButtons` 1/2/3) · Multiple Group Stack switch · Auto-Stack Players switch ("Stack players into win/lose stack on game end") · Shuffle Players switch ("Split winners & losers onto opposite teams") · Match Announcer switch (full-width row below the tile pairs).
 - **Live Sync** (`SessionSyncSection`): Host/Join controls — see "Session Sync" below. Only reachable when `role !== "guest"` (guests never see the Settings tab at all).
 - **Session**: Team Management (opens `TeamManagementModal`, backed by `teamStore`) · **New Session** (destructive confirm; dialog text appends "N active team member(s) will be loaded automatically" when applicable). On confirm: wipes `stackStore`, `quorumStore`, `playerStore`, `courtStore` (`clearAll()` each), then re-adds one player per **active** team-roster member (`addPlayer(m.name, m.rating)`) · **Import from Reclub** (`ImportReclubSheet`): parses a pasted Reclub "Participants" list (`utils/reclub.ts`, first word of each name), then wipes `stackStore`/`quorumStore`/`playerStore` (courts kept) and adds the selected names as `"NR"` players. Its input is a `BottomSheetTextInput` left deliberately uncontrolled. A controlled input garbles typed text on Android.
 - **About**: four tiles in this order — Buy me a Coffee (static, not wired) · `StackMaster v{version}` (from `Constants.expoConfig.version`) · Share StackMaster · Update Version. They render as a 2×2 grid on tablets and a single column on phones (`TileDivider`). **Update Version** fetches the latest GitHub release (`utils/appUpdate.ts`: `fetchLatestReleaseVersion` strips the tag's `v`; `isNewerVersion` compares numerically and pads missing parts, so tag `v1.1` equals app `1.1.0`). If newer, a `ConfirmDialog` opens `APP_DOWNLOAD_URL` in the browser to download the APK; otherwise an `AlertDialog` says it's up to date or that the check failed. Release tags must stay numeric-dotted (`vX.Y[.Z]`) for this compare to work. **Share StackMaster** opens `ShareAppDialog` — a QR code and copyable link to `APP_DOWNLOAD_URL` (`https://github.com/renanvillamor/stack-master/releases/latest/download/StackMaster.apk`, which GitHub redirects to the APK on the newest release — so **every release must attach the APK named exactly `StackMaster.apk`**) plus a "Share Link" button using React Native's `Share` API. On each open it fetches the GitHub Releases API (unauthenticated, 60 req/hr/IP) and shows the total `download_count` summed over all release assets as a pill (GitHub updates this count with a ~10 min lag, so a fresh download won't show immediately); the pill is hidden if the fetch fails. Update the URL constants if the repo moves.
@@ -427,6 +436,15 @@ A quorum is a _stronger_, all-4 commitment ("these exact 4 people play together 
 ### Multi-group stacking
 
 When `settingsStore.multiGroupStack` is on, the app maintains **separate beginner/advanced queues** end-to-end: the Stack screen renders two (or three, with Unsorted) independent columns instead of one grid; `addToQueue`/`addManyToQueue`/`addPlayersToTypeQueue`/`autoFillQueue` all restrict matches to same-group stacks; the Players screen's add-to-stack and lock-pair flows respect group boundaries too. Turning it off collapses everything back to one undifferentiated queue — group is simply ignored, not migrated/cleaned up (existing group-segregated stacks just stop being treated specially).
+
+### Match Announcer
+
+Off by default (`settingsStore.matchAnnouncer`). When off, nothing is spoken and the announce button is hidden, so the host calls matches out manually. When on:
+
+- every full queued `StackCard` and every `CourtCard` with a game shows an announce button (manual call-out on demand; a court's button names that court);
+- a match is auto-announced whenever a stack is put on a court: the Stack screen's Move to Court (`handleCourtSelect`) and the Court screen's post-game `NextStackPromptDialog` confirm. Moving an already-running game to another court (court ⋮ → Move to Court) is **not** announced.
+
+Speech runs only on the device it's enabled on; guests never hear it (their read-only `StackCard`s don't get `onAnnounce`). `expo-speech` is a native module, so adding it required a native rebuild (dev client and release APK).
 
 ### Landscape & columns
 

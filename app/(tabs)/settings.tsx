@@ -62,6 +62,8 @@ export default function SettingsScreen() {
     setLandscapeColumns,
     multiGroupStack,
     toggleMultiGroupStack,
+    matchAnnouncer,
+    toggleMatchAnnouncer,
   } = useSettingsStore();
   const { clearAll: clearPlayers, addPlayer } = usePlayerStore();
   const { clearAll: clearCourts } = useCourtStore();
@@ -298,6 +300,27 @@ export default function SettingsScreen() {
                   )}
                 />
               </View>
+              <Divider />
+              <List.Item
+                title="Match Announcer"
+                description="Announce matches aloud with an announce button on each stack and when a stack moves to a court. Off: the host calls matches"
+                descriptionNumberOfLines={3}
+                left={(props) => (
+                  <List.Icon
+                    {...props}
+                    icon="bullhorn-outline"
+                    color={theme.colors.primary}
+                  />
+                )}
+                right={() => (
+                  <Switch
+                    value={matchAnnouncer}
+                    onValueChange={toggleMatchAnnouncer}
+                    color={theme.colors.primary}
+                    testID="settings-match-announcer-switch"
+                  />
+                )}
+              />
             </Card>
 
             {/* Live Sync */}

@@ -12,6 +12,9 @@ interface SettingsState {
   setLandscapeColumns: (value: 1 | 2 | 3) => void;
   multiGroupStack: boolean;
   toggleMultiGroupStack: () => void;
+  /** Speak match call-outs aloud (StackCard announce button + auto-announce on court assignment). */
+  matchAnnouncer: boolean;
+  toggleMatchAnnouncer: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -43,6 +46,13 @@ export const useSettingsStore = create<SettingsState>()(
       toggleMultiGroupStack: () =>
         set((state) => {
           state.multiGroupStack = !state.multiGroupStack;
+        }),
+
+      matchAnnouncer: false,
+
+      toggleMatchAnnouncer: () =>
+        set((state) => {
+          state.matchAnnouncer = !state.matchAnnouncer;
         }),
     })),
     {

@@ -37,6 +37,8 @@ interface StackCardProps {
   showLabel?: boolean;
   onMorePress?: () => void;
   onMoveToCourt?: () => void;
+  /** Speaks this stack's match call-out. The button only renders when provided (Match Announcer setting on). */
+  onAnnounce?: () => void;
   onPlayerPress?: (playerId: string, team: 1 | 2) => void;
   /** Guest-viewer mode: hides the more-menu and Move to Court button entirely instead of just disabling them. */
   readOnly?: boolean;
@@ -263,6 +265,7 @@ export default function StackCard({
   showLabel = true,
   onMorePress,
   onMoveToCourt,
+  onAnnounce,
   onPlayerPress,
   readOnly = false,
 }: StackCardProps) {
@@ -359,6 +362,29 @@ export default function StackCard({
                 Losers
               </Chip>
             )}
+          </View>
+
+          {/* Time since the stack was created */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginRight: 6,
+            }}
+          >
+            <Icon
+              source="clock-outline"
+              size={12}
+              color={theme.colors.onSurfaceVariant}
+            />
+            <Text
+              variant="labelSmall"
+              style={{ color: theme.colors.onSurfaceVariant }}
+              testID={`stack-card-elapsed-${stack.id}`}
+            >
+              {formatElapsed(stack.createdAt)}
+            </Text>
           </View>
 
           {isUpNext && (
@@ -649,38 +675,38 @@ export default function StackCard({
               {courtName}
             </Chip>
           ) : (
-            <Button
-              mode={isFull ? "contained" : "outlined"}
-              icon="map-marker-plus-outline"
-              onPress={onMoveToCourt}
-              style={{ marginTop: 12 }}
-              disabled={!isFull}
-              testID={`stack-card-move-to-court-${stack.id}`}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 12,
+              }}
             >
-              Move to Court
-            </Button>
+              {onAnnounce && (
+                <IconButton
+                  icon="bullhorn-outline"
+                  mode="contained-tonal"
+                  size={20}
+                  onPress={onAnnounce}
+                  disabled={!isFull}
+                  style={{ margin: 0 }}
+                  accessibilityLabel="Announce match"
+                  testID={`stack-card-announce-${stack.id}`}
+                />
+              )}
+              <Button
+                mode={isFull ? "contained" : "outlined"}
+                icon="map-marker-plus-outline"
+                onPress={onMoveToCourt}
+                style={{ flex: 1 }}
+                disabled={!isFull}
+                testID={`stack-card-move-to-court-${stack.id}`}
+              >
+                Move to Court
+              </Button>
+            </View>
           ))}
-
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-            marginTop: 10,
-          }}
-        >
-          <Icon
-            source="clock-outline"
-            size={12}
-            color={theme.colors.onSurfaceVariant}
-          />
-          <Text
-            variant="labelSmall"
-            style={{ color: theme.colors.onSurfaceVariant }}
-          >
-            {formatElapsed(stack.createdAt)}
-          </Text>
-        </View>
       </View>
     </Card>
   );

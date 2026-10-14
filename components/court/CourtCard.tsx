@@ -46,6 +46,11 @@ interface CourtCardProps {
   gameStartedAt?: string | null;
   /** True when the given player is lock-paired with someone. */
   isPlayerLocked?: (playerId: string) => boolean;
+  /**
+   * Speaks this court's match call-out. undefined hides the button (Match
+   * Announcer off); null shows it disabled (announcer on, but no game here).
+   */
+  onAnnounce?: (() => void) | null;
   /** Guest-viewer mode: hides the more-menu and END GAME button entirely instead of just disabling them. */
   readOnly?: boolean;
 }
@@ -197,6 +202,7 @@ export default function CourtCard({
   onPlayerPress,
   gameStartedAt,
   isPlayerLocked,
+  onAnnounce,
   readOnly = false,
 }: CourtCardProps) {
   const theme = useTheme();
@@ -401,16 +407,37 @@ export default function CourtCard({
 
         {/* Done button — always visible; disabled when no active game. Hidden entirely in read-only (guest) mode. */}
         {!readOnly && (
-          <Button
-            mode="contained"
-            icon="flag-checkered"
-            onPress={onDone}
-            disabled={!onDone}
-            testID={`court-card-end-game-${court.id}`}
-            style={{ marginTop: 12 }}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 12,
+            }}
           >
-            END GAME
-          </Button>
+            {onAnnounce !== undefined && (
+              <IconButton
+                icon="bullhorn-outline"
+                mode="contained-tonal"
+                size={20}
+                onPress={onAnnounce ?? undefined}
+                disabled={!onAnnounce}
+                style={{ margin: 0 }}
+                accessibilityLabel="Announce match"
+                testID={`court-card-announce-${court.id}`}
+              />
+            )}
+            <Button
+              mode="contained"
+              icon="flag-checkered"
+              onPress={onDone}
+              disabled={!onDone}
+              testID={`court-card-end-game-${court.id}`}
+              style={{ flex: 1 }}
+            >
+              END GAME
+            </Button>
+          </View>
         )}
       </View>
     </Card>

@@ -20,6 +20,7 @@ import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Court, Stack } from "@/types";
+import { announceMatch } from "@/utils/announcer";
 import { checkQuorumsForPlayers } from "@/utils/quorum";
 import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import { useRouter } from "expo-router";
@@ -33,7 +34,8 @@ export default function CourtScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
-  const { shufflePlayers, autoStackPlayers } = useSettingsStore();
+  const { shufflePlayers, autoStackPlayers, matchAnnouncer } =
+    useSettingsStore();
   const isLandscape = width > height;
   const numColumns = useResponsiveColumns();
   const { courts, removeCourt } = useCourtStore();
@@ -219,6 +221,7 @@ export default function CourtScreen() {
       updatePlayerStatus(id, "Playing"),
     );
     setNextStackPrompt(null);
+    if (matchAnnouncer) announceMatch(nextStack, getPlayerName, court.name);
   };
 
   const handleMorePress = (court: Court) => {
@@ -291,7 +294,9 @@ export default function CourtScreen() {
     }
   };
 
-  const deleteTargetHasPlayers = !!(deleteTarget && getActiveStack(deleteTarget));
+  const deleteTargetHasPlayers = !!(
+    deleteTarget && getActiveStack(deleteTarget)
+  );
 
   const emptyCourts = courts.filter(
     (c) => !getActiveStack(c.id) && c.id !== selectedCourt?.id,
@@ -392,6 +397,14 @@ export default function CourtScreen() {
                 team2Players={activeStack?.team2.playerIds.map(getPlayerInfo)}
                 gameStartedAt={activeStack?.gameStartedAt}
                 isPlayerLocked={isPlayerLocked}
+                onAnnounce={
+                  !matchAnnouncer
+                    ? undefined
+                    : activeStack
+                      ? () =>
+                          announceMatch(activeStack, getPlayerName, item.name)
+                      : null
+                }
                 onPlayerPress={(playerId, team) =>
                   handlePlayerPress(item.id, playerId, team)
                 }

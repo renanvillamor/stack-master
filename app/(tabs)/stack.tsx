@@ -19,9 +19,13 @@ import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Player, PlayerRating, Stack } from "@/types";
+import { announceMatch } from "@/utils/announcer";
 import { getStackGroup } from "@/utils/groupQueue";
 import { findLockedOutsideQuorum } from "@/utils/quorum";
-import { useIsSmallDevice, useResponsiveColumns } from "@/hooks/useResponsiveColumns";
+import {
+  useIsSmallDevice,
+  useResponsiveColumns,
+} from "@/hooks/useResponsiveColumns";
 import React, { useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import { Button, Icon, IconButton, Text, useTheme } from "react-native-paper";
@@ -155,7 +159,7 @@ export default function StackScreen() {
   const { players, updatePlayerStatus } = usePlayerStore();
   const { quorums, createQuorum, removeQuorum, removeQuorumForStack } =
     useQuorumStore();
-  const { multiGroupStack } = useSettingsStore();
+  const { multiGroupStack, matchAnnouncer } = useSettingsStore();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const numColumns = useResponsiveColumns();
@@ -314,7 +318,18 @@ export default function StackScreen() {
     const ids = [...target.team1.playerIds, ...target.team2.playerIds];
     ids.forEach((id) => updatePlayerStatus(id, "Playing"));
     setCourtPickerStack(null);
+    if (matchAnnouncer) {
+      // Read fresh: the court may have just been auto-created above.
+      const court = useCourtStore
+        .getState()
+        .courts.find((c) => c.id === courtId);
+      announceMatch(target, getPlayerName, court?.name ?? null);
+    }
   };
+
+  /** Manual call-out from a StackCard: points players at the first free court, if any. */
+  const handleAnnounce = (stack: Stack) =>
+    announceMatch(stack, getPlayerName, availableCourts[0]?.name ?? null);
 
   const freeStackPlayers = (stack: Stack) => {
     const ids = [...stack.team1.playerIds, ...stack.team2.playerIds];
@@ -352,7 +367,11 @@ export default function StackScreen() {
       setLockedOutsideQuorum(conflicts);
       return;
     }
-    if (selectedStackPlayerIds.some((id) => quorums.find((q) => q.playerIds.includes(id)))) {
+    if (
+      selectedStackPlayerIds.some((id) =>
+        quorums.find((q) => q.playerIds.includes(id)),
+      )
+    ) {
       setQuorumMemberConflict(true);
       return;
     }
@@ -429,7 +448,10 @@ export default function StackScreen() {
   };
 
   /** User tapped a specific occupied player in a full target stack — stage the swap for confirmation instead of applying it immediately. */
-  const handleSelectSwapTarget = (toStackId: string, targetPlayerId: string) => {
+  const handleSelectSwapTarget = (
+    toStackId: string,
+    targetPlayerId: string,
+  ) => {
     if (!moveToStackDialog) return;
     setPendingSwap({
       fromStackId: moveToStackDialog.fromStackId,
@@ -562,6 +584,7 @@ export default function StackScreen() {
       showLabel={!multiGroupStack}
       onMorePress={() => handleMorePress(item)}
       onMoveToCourt={() => handleMoveToCourt(item)}
+      onAnnounce={matchAnnouncer ? () => handleAnnounce(item) : undefined}
       onPlayerPress={(playerId, team) =>
         handlePlayerPress(item.id, playerId, team)
       }
@@ -588,8 +611,8 @@ export default function StackScreen() {
           paddingHorizontal: 32,
         }}
       >
-        Long-press players on the Player tab and tap "Add to Stack" to fill
-        the stack.
+        Long-press players on the Player tab and tap "Add to Stack" to fill the
+        stack.
       </Text>
     </View>
   );
@@ -818,7 +841,9 @@ export default function StackScreen() {
         queuedStacks={queuedStacks.filter((s) => !isStackQuorum(s.id))}
         fromStackId={moveToStackDialog?.fromStackId ?? null}
         movingPlayerName={
-          moveToStackDialog ? getPlayerName(moveToStackDialog.playerId) : undefined
+          moveToStackDialog
+            ? getPlayerName(moveToStackDialog.playerId)
+            : undefined
         }
         pairedMove={
           moveToStackDialog ? isPairedMove(moveToStackDialog.playerId) : false
@@ -880,7 +905,6 @@ export default function StackScreen() {
         message="One or more players in this stack already belong to another quorum."
         onDismiss={() => setQuorumMemberConflict(false)}
       />
-
     </View>
   );
 }
