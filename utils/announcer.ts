@@ -4,6 +4,13 @@ import * as Speech from "expo-speech";
 
 const joinTeam = (names: string[]) => names.join(" and ");
 
+/**
+ * Android "-network" voices are synthesized on Google's servers, so they lag
+ * or fail on court-side wifi. They're hidden from the picker, and a saved one
+ * (picked before they were hidden) is ignored in favor of the phone default.
+ */
+const isOnlineVoice = (voiceId: string) => voiceId.includes("-network");
+
 export const SAMPLE_ANNOUNCEMENT =
   "Next Match: Alex and Sam versus Jordan and Casey. Please proceed to Court 1.";
 
@@ -38,7 +45,8 @@ export function speakWith(
   pitch: number,
 ): void {
   Speech.stop();
-  Speech.speak(text, { voice: voiceId ?? undefined, rate, pitch });
+  const voice = voiceId && !isOnlineVoice(voiceId) ? voiceId : undefined;
+  Speech.speak(text, { voice, rate, pitch });
 }
 
 /** Speaks the match call-out using the announcer settings from Settings. */
@@ -78,12 +86,15 @@ function regionLabel(language: string): string {
 }
 
 /**
- * English voices installed on this device, grouped by region with readable
- * labels ("English (UK) · Voice 2"); engine ids like "en-gb-x-rjs-network"
- * mean nothing to a host. Falls back to every voice if none are English.
+ * English on-device voices, grouped by region with readable labels
+ * ("English (UK) · Voice 2"); engine ids like "en-gb-x-rjs-local" mean
+ * nothing to a host. Online voices are left out (see isOnlineVoice). Falls
+ * back to every on-device voice if none are English.
  */
 export async function getAnnouncerVoicesAsync(): Promise<AnnouncerVoice[]> {
-  const voices = await Speech.getAvailableVoicesAsync();
+  const voices = (await Speech.getAvailableVoicesAsync()).filter(
+    (v) => !isOnlineVoice(v.identifier),
+  );
   const english = voices.filter((v) =>
     v.language.toLowerCase().startsWith("en"),
   );
@@ -103,7 +114,6 @@ export async function getAnnouncerVoicesAsync(): Promise<AnnouncerVoice[]> {
       id: v.identifier,
       label: `${region} · Voice ${countPerRegion[region]}`,
       language: v.language,
-      online: v.identifier.includes("-network"),
       enhanced: v.quality === Speech.VoiceQuality.Enhanced,
     };
   });

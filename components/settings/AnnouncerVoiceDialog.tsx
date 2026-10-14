@@ -127,27 +127,15 @@ export default function AnnouncerVoiceDialog({
             >
               {item ? item.label : "Phone default"}
             </Text>
-            {item && (item.online || item.enhanced) && (
-              <View style={{ flexDirection: "row", gap: 4 }}>
-                {item.enhanced && (
-                  <Chip
-                    compact
-                    textStyle={{ fontSize: 10, marginVertical: 0 }}
-                    style={{ backgroundColor: theme.colors.secondaryContainer }}
-                  >
-                    High quality
-                  </Chip>
-                )}
-                {item.online && (
-                  <Chip
-                    compact
-                    icon="wifi"
-                    textStyle={{ fontSize: 10, marginVertical: 0 }}
-                    style={{ backgroundColor: "#E0E7FF" }}
-                  >
-                    Online
-                  </Chip>
-                )}
+            {item?.enhanced && (
+              <View style={{ flexDirection: "row" }}>
+                <Chip
+                  compact
+                  textStyle={{ fontSize: 10, marginVertical: 0 }}
+                  style={{ backgroundColor: theme.colors.secondaryContainer }}
+                >
+                  High quality
+                </Chip>
               </View>
             )}
           </View>
@@ -233,9 +221,11 @@ export default function AnnouncerVoiceDialog({
                       padding: 16,
                     }}
                   >
-                    Voices come from your phone's text-to-speech engine. If a
-                    voice sounds wrong or stays silent, download it in Android
-                    Settings → Text-to-speech. Online voices need internet.
+                    Voices come from your phone's text-to-speech engine, and
+                    only ones that work offline are listed. To add more accents,
+                    such as English (India), go to Android Settings →
+                    Text-to-speech → Google engine settings → Install voice
+                    data, download the language, then reopen this dialog.
                   </Text>
                 )
               }
