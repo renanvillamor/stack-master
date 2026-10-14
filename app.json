@@ -2,7 +2,7 @@
   "expo": {
     "name": "StackMaster",
     "slug": "StackMaster",
-    "version": "1.3.1",
+    "version": "1.3.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "stackmaster",
@@ -24,7 +24,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.amawachoya.StackMaster",
-      "versionCode": 5
+      "versionCode": 6
     },
     "web": {
       "bundler": "metro",
