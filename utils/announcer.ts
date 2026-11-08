@@ -11,6 +11,9 @@ const joinTeam = (names: string[]) => names.join(" and ");
  */
 const isOnlineVoice = (voiceId: string) => voiceId.includes("-network");
 
+/** Roughly how many filler words the TTS engine speaks per second at rate 1.0. */
+const WARMUP_WORDS_PER_SEC = 3;
+
 export const SAMPLE_ANNOUNCEMENT =
   "Next Match: Alex and Sam versus Jordan and Casey. Please proceed to Court 1.";
 
@@ -37,15 +40,27 @@ export function buildMatchAnnouncement(
  * playing. Android resets to the locale's default voice on every call before
  * applying `voice`, so a null or no-longer-installed voice falls back to the
  * phone default instead of sticking to a previously chosen one.
+ *
+ * A Bluetooth speaker only starts playing a second or more after audio
+ * begins, which clips the first words. With `warmupSec` > 0, a muted filler
+ * utterance is queued first to wake the speaker up, and the call-out plays
+ * right after it (expo-speech queues utterances rather than replacing them).
  */
 export function speakWith(
   text: string,
   voiceId: string | null,
   rate: number,
   pitch: number,
+  warmupSec = 0,
 ): void {
   Speech.stop();
   const voice = voiceId && !isOnlineVoice(voiceId) ? voiceId : undefined;
+  if (warmupSec > 0) {
+    const filler = Array(Math.round(warmupSec * WARMUP_WORDS_PER_SEC))
+      .fill("ready")
+      .join(", ");
+    Speech.speak(filler, { voice, rate: 1, volume: 0 });
+  }
   Speech.speak(text, { voice, rate, pitch });
 }
 
@@ -55,13 +70,14 @@ export function announceMatch(
   getPlayerName: (playerId: string) => string,
   courtName: string | null,
 ): void {
-  const { announcerVoice, announcerRate, announcerPitch } =
+  const { announcerVoice, announcerRate, announcerPitch, announcerWarmupSec } =
     useSettingsStore.getState();
   speakWith(
     buildMatchAnnouncement(stack, getPlayerName, courtName),
     announcerVoice?.id ?? null,
     announcerRate,
     announcerPitch,
+    announcerWarmupSec,
   );
 }
 

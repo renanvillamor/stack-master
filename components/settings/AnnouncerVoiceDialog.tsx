@@ -33,6 +33,13 @@ const RATE_OPTIONS = [
   { value: "1.1", label: "Fast" },
 ];
 
+const WARMUP_OPTIONS = [
+  { value: "0", label: "Off" },
+  { value: "1", label: "1s" },
+  { value: "2", label: "2s" },
+  { value: "3", label: "3s" },
+];
+
 const PITCH_OPTIONS = [
   { value: "0.8", label: "Low" },
   { value: "1", label: "Normal" },
@@ -69,6 +76,8 @@ export default function AnnouncerVoiceDialog({
     setAnnouncerRate,
     announcerPitch,
     setAnnouncerPitch,
+    announcerWarmupSec,
+    setAnnouncerWarmupSec,
   } = useSettingsStore();
 
   // undefined = loading, null = engine couldn't list voices
@@ -88,7 +97,13 @@ export default function AnnouncerVoiceDialog({
   }, [visible]);
 
   const preview = (voiceId: string | null) =>
-    speakWith(SAMPLE_ANNOUNCEMENT, voiceId, announcerRate, announcerPitch);
+    speakWith(
+      SAMPLE_ANNOUNCEMENT,
+      voiceId,
+      announcerRate,
+      announcerPitch,
+      announcerWarmupSec,
+    );
 
   const savedVoiceMissing =
     !!announcerVoice &&
@@ -182,6 +197,22 @@ export default function AnnouncerVoiceDialog({
               buttons={PITCH_OPTIONS}
               density="small"
             />
+          </View>
+          <View>
+            <SettingLabel>Bluetooth Speaker Delay</SettingLabel>
+            <SegmentedButtons
+              value={String(announcerWarmupSec)}
+              onValueChange={(v) => setAnnouncerWarmupSec(Number(v))}
+              buttons={WARMUP_OPTIONS}
+              density="small"
+            />
+            <Text
+              variant="bodySmall"
+              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+            >
+              If a speaker cuts off the first words, pick the shortest delay
+              that fixes it. Leave Off for the phone&apos;s own speaker.
+            </Text>
           </View>
           {savedVoiceMissing && (
             <Text variant="bodySmall" style={{ color: theme.colors.error }}>

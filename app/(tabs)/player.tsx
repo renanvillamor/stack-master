@@ -10,7 +10,6 @@ import OptionPickerSheet, {
 import PlayerCard from "@/components/player/PlayerCard";
 import PlayerFormModal from "@/components/player/PlayerFormModal";
 import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
-import PlayerStandingsDialog from "@/components/player/PlayerStandingsDialog";
 import { usePlayerStore } from "@/store/playerStore";
 import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -55,7 +54,6 @@ export default function PlayerScreen() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [historyPlayer, setHistoryPlayer] = useState<Player | null>(null);
-  const [standingsVisible, setStandingsVisible] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   const [lockGroupMismatch, setLockGroupMismatch] = useState(false);
@@ -657,14 +655,6 @@ export default function PlayerScreen() {
           }
           testID="player-sort-button"
         />
-        <IconButton
-          icon="trophy"
-          size={22}
-          onPress={() => setStandingsVisible(true)}
-          iconColor="#FFD700"
-          style={{ backgroundColor: "#FFD70020" }}
-          testID="player-standings-button"
-        />
       </View>
 
       <FlatList
@@ -832,12 +822,6 @@ export default function PlayerScreen() {
         ref={bulkSheetRef}
         title={`${selectedIds.size} selected`}
         actions={bulkPlayerActions}
-      />
-
-      <PlayerStandingsDialog
-        visible={standingsVisible}
-        players={players}
-        onDismiss={() => setStandingsVisible(false)}
       />
 
       <PlayerMatchHistoryDialog

@@ -307,7 +307,7 @@ export function switchInput(page: Page, testId: string) {
   return page.getByTestId(testId).locator("input");
 }
 
-/** Multi-group stacking defaults on; several stack/queue flows are simpler to assert against a single flat queue. */
+/** Multi-group stacking defaults off; tests that exercise the Beginner/Advanced split turn it on. */
 export async function setMultiGroupStacking(page: Page, enabled: boolean) {
   await goToSettingsTab(page);
   const input = switchInput(page, "settings-multigroup-switch");

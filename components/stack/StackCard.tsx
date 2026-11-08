@@ -26,6 +26,12 @@ interface StackCardProps {
   isPlayerLocked?: (playerId: string) => boolean;
   /** True when playerIdA and playerIdB were teammates in each other's most recent recorded match — flags a repeat team combo so the admin can shuffle instead. */
   isRepeatTeam?: (playerIdA: string, playerIdB: string) => boolean;
+  /**
+   * The session's average player wait in ms (see computeMatchLogStats). A
+   * player whose time since their last game exceeds it gets an amber "long
+   * wait" last-played label. null/undefined = not enough data, no alert.
+   */
+  longWaitMs?: number | null;
   courtName?: string;
   /** True when this is the stack that will be suggested for the next freed court. */
   isUpNext?: boolean;
@@ -47,6 +53,7 @@ interface StackCardProps {
 const TEAM1_COLOR = "#DC2626"; // red
 const TEAM2_COLOR = "#1D4ED8"; // blue
 const REPEAT_WARNING_COLOR = "#B45309"; // amber-700
+const LONG_WAIT_COLOR = "#C2410C"; // orange-700
 
 /** Queue badge colors by stack type (gray / green / red): the badge color alone marks winner/loser stacks. */
 const TYPE_BADGE: Record<
@@ -92,6 +99,7 @@ function PlayerAvatar({
   getPlayerName,
   getPlayerRating,
   getPlayerLastPlayed,
+  longWaitMs,
   isLocked,
   accentColor,
   onPress,
@@ -100,6 +108,7 @@ function PlayerAvatar({
   getPlayerName: (id: string) => string;
   getPlayerRating: (id: string) => PlayerRating;
   getPlayerLastPlayed: (id: string) => string | null;
+  longWaitMs?: number | null;
   isLocked?: boolean;
   accentColor: string;
   onPress?: () => void;
@@ -140,6 +149,15 @@ function PlayerAvatar({
   const name = getPlayerName(playerId);
   const rating = getPlayerRating(playerId);
   const lastPlayed = getPlayerLastPlayed(playerId);
+  // Waiting longer than the session's average wait → flag for the host.
+  // Players who haven't played yet have no measurable wait, so never flag.
+  const isLongWait =
+    longWaitMs != null &&
+    lastPlayed != null &&
+    Date.now() - new Date(lastPlayed).getTime() > longWaitMs;
+  const lastPlayedColor = isLongWait
+    ? LONG_WAIT_COLOR
+    : theme.colors.onSurfaceVariant;
 
   const avatar = (
     <View
@@ -178,6 +196,12 @@ function PlayerAvatar({
   );
   const lastPlayedBadge = (
     <View
+      accessibilityLabel={
+        isLongWait
+          ? `Last played ${formatLastPlayed(lastPlayed)}, longer than the average wait`
+          : undefined
+      }
+      testID={isLongWait ? `stack-card-long-wait-${playerId}` : undefined}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -186,14 +210,15 @@ function PlayerAvatar({
       }}
     >
       <Icon
-        source="clock-outline"
+        source={isLongWait ? "clock-alert-outline" : "clock-outline"}
         size={11}
-        color={theme.colors.onSurfaceVariant}
+        color={lastPlayedColor}
       />
       <Text
         style={{
-          color: theme.colors.onSurfaceVariant,
+          color: lastPlayedColor,
           fontSize: 11,
+          fontWeight: isLongWait ? "700" : "400",
           flexShrink: 1,
         }}
         numberOfLines={1}
@@ -278,6 +303,7 @@ export default function StackCard({
   getPlayerLastPlayed,
   isPlayerLocked,
   isRepeatTeam,
+  longWaitMs,
   courtName,
   isUpNext,
   isPinned,
@@ -510,6 +536,7 @@ export default function StackCard({
               getPlayerName={getPlayerName}
               getPlayerRating={getPlayerRating}
               getPlayerLastPlayed={getPlayerLastPlayed}
+              longWaitMs={longWaitMs}
               isLocked={
                 stack.team1.playerIds[0]
                   ? isPlayerLocked?.(stack.team1.playerIds[0])
@@ -527,6 +554,7 @@ export default function StackCard({
               getPlayerName={getPlayerName}
               getPlayerRating={getPlayerRating}
               getPlayerLastPlayed={getPlayerLastPlayed}
+              longWaitMs={longWaitMs}
               isLocked={
                 stack.team1.playerIds[1]
                   ? isPlayerLocked?.(stack.team1.playerIds[1])
@@ -629,6 +657,7 @@ export default function StackCard({
               getPlayerName={getPlayerName}
               getPlayerRating={getPlayerRating}
               getPlayerLastPlayed={getPlayerLastPlayed}
+              longWaitMs={longWaitMs}
               isLocked={
                 stack.team2.playerIds[0]
                   ? isPlayerLocked?.(stack.team2.playerIds[0])
@@ -646,6 +675,7 @@ export default function StackCard({
               getPlayerName={getPlayerName}
               getPlayerRating={getPlayerRating}
               getPlayerLastPlayed={getPlayerLastPlayed}
+              longWaitMs={longWaitMs}
               isLocked={
                 stack.team2.playerIds[1]
                   ? isPlayerLocked?.(stack.team2.playerIds[1])

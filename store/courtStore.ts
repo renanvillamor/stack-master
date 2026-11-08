@@ -13,6 +13,8 @@ interface CourtState {
   editCourt: (id: string, name: string) => void;
   removeCourt: (id: string) => void;
   clearAll: () => void;
+  /** Replaces every court at once — used when taking over hosting from another device. */
+  replaceAll: (courts: Court[]) => void;
 }
 
 export const useCourtStore = create<CourtState>()(
@@ -39,6 +41,11 @@ export const useCourtStore = create<CourtState>()(
       clearAll: () =>
         set((state) => {
           state.courts = [];
+        }),
+
+      replaceAll: (courts) =>
+        set((state) => {
+          state.courts = courts;
         }),
     })),
     {

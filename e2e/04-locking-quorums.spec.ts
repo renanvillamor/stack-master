@@ -11,6 +11,7 @@ import {
   openStackMenu,
   playerCard,
   selectPlayers,
+  setMultiGroupStacking,
   stackCardPlayerRow,
   stackCards,
   stackCardWithPlayers,
@@ -61,7 +62,8 @@ test.describe("Locked pairs", () => {
   test("blocks locking players from different skill groups when multi-group stacking is on", async ({
     freshApp: page,
   }) => {
-    // multiGroupStack defaults to true (settingsStore.ts).
+    // multiGroupStack defaults to false (settingsStore.ts) — turn it on.
+    await setMultiGroupStacking(page, true);
     await addPlayer(page, "Lowly", "2.0"); // beginner (<=2.0)
     await addPlayer(page, "Highly", "3.0"); // advanced (>2.0)
     await lockPair(page, "Lowly", "Highly");

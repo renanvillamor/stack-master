@@ -19,12 +19,15 @@ interface PlayerState {
     teammateIds: string[],
     opponentIds: string[],
     gameStartedAt?: string | null,
+    teams?: { team1: string[]; team2: string[] },
   ) => void;
   /** Locks two players together for the session, breaking either one's existing pairing first. */
   lockPlayers: (idA: string, idB: string) => void;
   /** Unlocks the given player and their partner (if any). */
   unlockPlayer: (id: string) => void;
   clearAll: () => void;
+  /** Replaces the whole roster at once — used when taking over hosting from another device. */
+  replaceAll: (players: Player[]) => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -73,7 +76,14 @@ export const usePlayerStore = create<PlayerState>()(
           if (player) player.status = status;
         }),
 
-      recordGameResult: (id, result, teammateIds, opponentIds, gameStartedAt) =>
+      recordGameResult: (
+        id,
+        result,
+        teammateIds,
+        opponentIds,
+        gameStartedAt,
+        teams,
+      ) =>
         set((state) => {
           const player = state.players.find((p) => p.id === id);
           if (player) {
@@ -85,6 +95,9 @@ export const usePlayerStore = create<PlayerState>()(
               teammateIds,
               opponentIds,
               gameStartedAt: gameStartedAt ?? null,
+              ...(teams && {
+                teams: { team1: [...teams.team1], team2: [...teams.team2] },
+              }),
             });
           }
         }),
@@ -128,6 +141,11 @@ export const usePlayerStore = create<PlayerState>()(
       clearAll: () =>
         set((state) => {
           state.players = [];
+        }),
+
+      replaceAll: (players) =>
+        set((state) => {
+          state.players = players;
         }),
     })),
     {

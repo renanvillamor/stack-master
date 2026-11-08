@@ -20,12 +20,12 @@ test.describe("Settings screen", () => {
     const shuffle = switchInput(page, "settings-shuffle-switch");
 
     // Defaults per settingsStore.ts.
-    await expect(multiGroup).toBeChecked();
+    await expect(multiGroup).not.toBeChecked();
     await expect(autoStack).toBeChecked();
     await expect(shuffle).toBeChecked();
 
     await page.getByTestId("settings-multigroup-switch").click();
-    await expect(multiGroup).not.toBeChecked();
+    await expect(multiGroup).toBeChecked();
     await expect(autoStack).toBeChecked(); // unaffected
 
     await page.getByTestId("settings-autostack-switch").click();

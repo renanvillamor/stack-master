@@ -22,6 +22,8 @@ interface QuorumState {
   getQuorumForPlayer: (playerId: string) => Quorum | undefined;
   getQuorumForStack: (stackId: string) => Quorum | undefined;
   clearAll: () => void;
+  /** Replaces every quorum at once — used when taking over hosting from another device. */
+  replaceAll: (quorums: Quorum[]) => void;
 }
 
 export const useQuorumStore = create<QuorumState>()(
@@ -74,6 +76,11 @@ export const useQuorumStore = create<QuorumState>()(
       clearAll: () =>
         set((state) => {
           state.quorums = [];
+        }),
+
+      replaceAll: (quorums) =>
+        set((state) => {
+          state.quorums = quorums;
         }),
     })),
     {

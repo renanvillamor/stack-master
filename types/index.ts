@@ -20,6 +20,9 @@ export interface MatchRecord {
   teammateIds: string[];
   opponentIds: string[];
   gameStartedAt?: string | null; // ISO; absent on records saved before durations were tracked
+  // Full lineup in court order (stack team1/team2), so the game log can show
+  // teams as played; absent on records saved before it was tracked.
+  teams?: { team1: string[]; team2: string[] };
 }
 
 // One finished game, reconstructed from the 4 players' MatchRecords (there is
@@ -29,6 +32,10 @@ export interface GameLogEntry {
   gameStartedAt: string | null; // null when unknown (older records)
   winnerIds: string[];
   loserIds: string[];
+  // Court order. For older records without a saved lineup, team1 = winners.
+  team1Ids: string[];
+  team2Ids: string[];
+  winningTeam: 1 | 2;
 }
 
 export interface Player {
@@ -99,6 +106,14 @@ export interface Quorum {
   createdAt: string;
 }
 
+/** A text file picked for Import from Reclub, remembered so it can be re-read (or the picker reopened there) next time. */
+export interface ReclubImportFile {
+  /** Android content:// URI the app holds a persisted read permission for. */
+  uri: string;
+  /** Human-readable name for the UI (Drive URIs carry no filename). */
+  label: string;
+}
+
 // ─── Session Sync ────────────────────────────────────────────────────────────
 
 export type SessionRole = "host" | "guest" | null;
@@ -117,4 +132,19 @@ export interface SessionSnapshot {
   quorums: Quorum[];
   /** Host's multi-group (Beginner/Advanced) stacking setting — guests mirror the host's queue layout rather than their own local preference. */
   multiGroupStack: boolean;
+}
+
+/** Result of a guest entering the host's 4-digit transfer code (`claim_host_transfer` RPC); "error" = network/server failure. */
+export type HostTransferResult =
+  | "ok"
+  | "wrong_code"
+  | "locked"
+  | "expired"
+  | "error";
+
+/** Host-only: a hand-over offered to one watching guest, waiting for them to enter `code`. */
+export interface PendingHostTransfer {
+  guestId: string;
+  guestName: string;
+  code: string;
 }

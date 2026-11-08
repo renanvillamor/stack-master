@@ -9,6 +9,7 @@ import CourtCard from "@/components/court/CourtCard";
 import CourtFormModal from "@/components/court/CourtFormModal";
 import IncompleteStackPromptDialog from "@/components/court/IncompleteStackPromptDialog";
 import NextStackPromptDialog from "@/components/court/NextStackPromptDialog";
+import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
 import CourtPickerModal from "@/components/stack/CourtPickerModal";
 import PlayerPickerDialog from "@/components/stack/PlayerPickerDialog";
 import GuestCourtView from "@/components/court/GuestCourtView";
@@ -19,7 +20,7 @@ import { useQuorumStore } from "@/store/quorumStore";
 import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
-import { Court, Stack } from "@/types";
+import { Court, Player, Stack } from "@/types";
 import { announceMatch } from "@/utils/announcer";
 import { checkQuorumsForPlayers } from "@/utils/quorum";
 import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
@@ -66,7 +67,7 @@ export default function CourtScreen() {
     court: Court;
     stack: Stack;
   } | null>(null);
-  // Player-level actions — changing which team a player is on mid-game.
+  // Player-level actions — changing which team a player is on mid-game, or viewing their match history.
   const [playerTarget, setPlayerTarget] = useState<{
     stackId: string;
     playerId: string;
@@ -78,6 +79,7 @@ export default function CourtScreen() {
     candidates: string[];
   } | null>(null);
   const [noSwapCandidates, setNoSwapCandidates] = useState(false);
+  const [historyPlayer, setHistoryPlayer] = useState<Player | null>(null);
 
   const role = useSessionStore((s) => s.role);
   if (role === "guest") {
@@ -166,6 +168,11 @@ export default function CourtScreen() {
     nextStackCourtRef.current = activeCourt;
     setActiveCourt(null);
 
+    const lineup = {
+      team1: stack.team1.playerIds,
+      team2: stack.team2.playerIds,
+    };
+
     winnerIds.forEach((id) =>
       recordGameResult(
         id,
@@ -173,6 +180,7 @@ export default function CourtScreen() {
         winnerIds.filter((w) => w !== id),
         loserIds,
         stack.gameStartedAt,
+        lineup,
       ),
     );
     loserIds.forEach((id) =>
@@ -182,6 +190,7 @@ export default function CourtScreen() {
         loserIds.filter((l) => l !== id),
         winnerIds,
         stack.gameStartedAt,
+        lineup,
       ),
     );
 
@@ -272,6 +281,19 @@ export default function CourtScreen() {
       onPress: handleChangeTeam,
       disabled: !!playerTarget && isPlayerLocked(playerTarget.playerId),
       testID: "court-action-switch-team",
+    },
+    {
+      label: "Match History",
+      icon: "history",
+      onPress: () => {
+        if (playerTarget) {
+          setHistoryPlayer(
+            players.find((p) => p.id === playerTarget.playerId) ?? null,
+          );
+        }
+        setPlayerTarget(null);
+      },
+      testID: "court-action-history",
     },
   ];
 
@@ -502,6 +524,12 @@ export default function CourtScreen() {
           setSwapDialog(null);
         }}
         onDismiss={() => setSwapDialog(null)}
+      />
+
+      <PlayerMatchHistoryDialog
+        player={historyPlayer}
+        getPlayerName={getPlayerName}
+        onDismiss={() => setHistoryPlayer(null)}
       />
 
       <AlertDialog

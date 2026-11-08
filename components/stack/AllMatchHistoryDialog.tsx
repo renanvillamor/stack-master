@@ -15,14 +15,23 @@ const WIN_COLOR = "#15803D";
 const WIN_BG = "#DCFCE7";
 const LOSS_COLOR = "#B91C1C";
 const LOSS_BG = "#FEE2E2";
-const DURATION_COL_W = 72;
+const NUMBER_COL_W = 28;
+const TIME_COL_W = 64;
+const DURATION_COL_W = 84;
 
-/** A span of time as "45m" / "1h 05m", or "—" when unknown. */
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+/** A span of time as "1 minute" / "45 minutes" / "1 hour 5 minutes", or "—" when unknown. */
 function formatMs(ms: number | null): string {
   if (ms === null || !Number.isFinite(ms)) return "—";
   const minutes = Math.max(0, Math.round(ms / 60_000));
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+  if (minutes === 0) return "< 1 minute";
+  if (minutes < 60) return plural(minutes, "minute");
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? plural(hours, "hour")
+    : `${plural(hours, "hour")} ${plural(rest, "minute")}`;
 }
 
 /** Game length from its start/end times, or "—" when the start wasn't recorded. */
@@ -59,8 +68,12 @@ function StatTile({
         color={theme.colors.primary}
       />
       <Text
-        variant="titleLarge"
-        style={{ color: theme.colors.primary, fontWeight: "800" }}
+        variant="titleMedium"
+        style={{
+          color: theme.colors.primary,
+          fontWeight: "800",
+          textAlign: "center",
+        }}
       >
         {value}
       </Text>
@@ -74,49 +87,31 @@ function StatTile({
   );
 }
 
-function formatGameDate(iso: string): string {
-  const date = new Date(iso);
-  return (
-    date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-    " " +
-    date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-  );
+/** Time the game ended (result recorded). No date: a session's games are assumed to be on one day. */
+function formatGameTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function TeamLine({
-  label,
-  color,
-  backgroundColor,
-  names,
-}: {
-  label: string;
-  color: string;
-  backgroundColor: string;
-  names: string;
-}) {
+/** One team as "Player1/Player2", tinted green if it won, red if it lost. */
+function TeamPill({ names, won }: { names: string; won: boolean }) {
+  const color = won ? WIN_COLOR : LOSS_COLOR;
   return (
     <View
+      accessibilityLabel={`${names}, ${won ? "won" : "lost"}`}
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        backgroundColor,
-        borderLeftWidth: 3,
-        borderLeftColor: color,
+        flexShrink: 1,
+        backgroundColor: won ? WIN_BG : LOSS_BG,
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
       }}
     >
       <Text
-        variant="labelSmall"
-        style={{ color, fontWeight: "800", width: 36, letterSpacing: 0.5 }}
-      >
-        {label}
-      </Text>
-      <Text
         variant="bodyMedium"
-        style={{ color, fontWeight: "600", flex: 1 }}
+        style={{ color, fontWeight: "600" }}
         numberOfLines={1}
       >
         {names}
@@ -146,7 +141,13 @@ export default function AllMatchHistoryDialog({
   const getPlayerName = (id: string) =>
     players.find((p) => p.id === id)?.name ?? "Removed player";
   const teamNames = (ids: string[]) =>
-    ids.length > 0 ? ids.map(getPlayerName).join(" / ") : "—";
+    ids.length > 0 ? ids.map(getPlayerName).join("/") : "—";
+
+  const columnHeaderStyle = {
+    color: theme.colors.onSurfaceVariant,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.8,
+  };
 
   const renderGame = ({
     item,
@@ -168,47 +169,52 @@ export default function AllMatchHistoryDialog({
             : theme.colors.surfaceVariant + "30",
       }}
     >
-      <View style={{ flex: 1, gap: 4 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Text
-            variant="labelMedium"
-            style={{ color: theme.colors.onSurface, fontWeight: "700" }}
-          >
-            Game #{games.length - index}
-          </Text>
-          <Text
-            variant="labelSmall"
-            style={{ color: theme.colors.onSurfaceVariant }}
-          >
-            {formatGameDate(item.date)}
-          </Text>
-        </View>
-        <TeamLine
-          label="WIN"
-          color={WIN_COLOR}
-          backgroundColor={WIN_BG}
-          names={teamNames(item.winnerIds)}
+      <Text
+        variant="labelMedium"
+        style={{
+          width: NUMBER_COL_W,
+          color: theme.colors.onSurface,
+          fontWeight: "700",
+        }}
+      >
+        #{games.length - index}
+      </Text>
+      <Text
+        variant="labelSmall"
+        style={{ width: TIME_COL_W, color: theme.colors.onSurfaceVariant }}
+      >
+        {formatGameTime(item.date)}
+      </Text>
+      {/* Teams in court order: Team 1 vs Team 2 */}
+      <View
+        style={{
+          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <TeamPill
+          names={teamNames(item.team1Ids)}
+          won={item.winningTeam === 1}
         />
-        <TeamLine
-          label="LOSS"
-          color={LOSS_COLOR}
-          backgroundColor={LOSS_BG}
-          names={teamNames(item.loserIds)}
+        <Text
+          variant="labelMedium"
+          style={{ color: theme.colors.onSurfaceVariant }}
+        >
+          vs
+        </Text>
+        <TeamPill
+          names={teamNames(item.team2Ids)}
+          won={item.winningTeam === 2}
         />
       </View>
       <Text
-        variant="bodyMedium"
+        variant="labelSmall"
         style={{
           width: DURATION_COL_W,
           textAlign: "center",
           color: theme.colors.onSurface,
-          fontWeight: "700",
         }}
         testID="all-match-history-duration"
       >
@@ -276,19 +282,19 @@ export default function AllMatchHistoryDialog({
             value={
               stats.avgMatchCount === null
                 ? "—"
-                : String(Math.round(stats.avgMatchCount * 10) / 10)
+                : String(Math.floor(stats.avgMatchCount))
             }
-            label="Avg Matches / Player"
+            label="Average Matches per Player"
           />
           <StatTile
             icon="timer-outline"
             value={formatMs(stats.avgGameMs)}
-            label="Avg Game Time"
+            label="Average Game Time"
           />
           <StatTile
             icon="timer-sand"
             value={formatMs(stats.avgWaitMs)}
-            label="Avg Player Wait"
+            label="Average Player Wait"
           />
         </View>
 
@@ -305,14 +311,18 @@ export default function AllMatchHistoryDialog({
         >
           <Text
             variant="labelSmall"
-            style={{
-              flex: 1,
-              color: theme.colors.onSurfaceVariant,
-              textTransform: "uppercase",
-              letterSpacing: 0.8,
-            }}
+            style={[columnHeaderStyle, { width: NUMBER_COL_W }]}
           >
-            Game
+            #
+          </Text>
+          <Text
+            variant="labelSmall"
+            style={[columnHeaderStyle, { width: TIME_COL_W }]}
+          >
+            Time
+          </Text>
+          <Text variant="labelSmall" style={[columnHeaderStyle, { flex: 1 }]}>
+            Match
           </Text>
           <Text
             variant="labelSmall"

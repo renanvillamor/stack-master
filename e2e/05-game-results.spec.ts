@@ -101,7 +101,7 @@ test.describe("Court screen — game results routing", () => {
 
     const newWinnerStack = stackCardWithPlayers(page, ["P2"]);
     await expect(newWinnerStack).toBeVisible();
-    await expect(newWinnerStack.getByText("Winners")).toBeVisible();
+    await expect(newWinnerStack.getByLabel(/^Winners stack/)).toBeVisible();
   });
 
   test("shuffle doesn't reunite fresh winners as teammates when topping off a stack that's full on one team", async ({
@@ -227,6 +227,6 @@ test.describe("Court screen — game results routing", () => {
     await goToStackTab(page);
     const winnerStack = stackCardWithPlayers(page, ["C1", "C2"]);
     await expect(winnerStack).toBeVisible();
-    await expect(winnerStack.getByText("Winners")).toBeVisible();
+    await expect(winnerStack.getByLabel(/^Winners stack/)).toBeVisible();
   });
 });

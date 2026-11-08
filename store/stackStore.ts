@@ -519,6 +519,8 @@ interface StackState {
   canAutoFillQueue: (group?: PlayerGroupKey) => boolean;
   /** Clears all stacks. */
   clearAll: () => void;
+  /** Replaces the whole queue (and pin) at once — used when taking over hosting from another device. */
+  replaceAll: (stacks: Stack[], pinnedStackId: string | null) => void;
   /** Id of a stack manually pinned to jump the queue, or null if none is pinned. */
   pinnedStackId: string | null;
   /**
@@ -1139,6 +1141,12 @@ export const useStackStore = create<StackState>()(
         set((state) => {
           state.stacks = [];
           state.pinnedStackId = null;
+        }),
+
+      replaceAll: (stacks, pinnedStackId) =>
+        set((state) => {
+          state.stacks = stacks;
+          state.pinnedStackId = pinnedStackId;
         }),
 
       getSuggestedNextStack: () => {

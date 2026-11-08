@@ -16,7 +16,8 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { useTeamStore } from "@/store/teamStore";
 import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
-import { fetchLatestReleaseVersion, isNewerVersion } from "@/utils/appUpdate";
+import { useAppUpdateStore } from "@/store/appUpdateStore";
+import { isNewerVersion } from "@/utils/appUpdate";
 import Constants from "expo-constants";
 import React, { useRef, useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
@@ -68,6 +69,7 @@ export default function SettingsScreen() {
     announcerVoice,
     announcerRate,
     announcerPitch,
+    announcerWarmupSec,
   } = useSettingsStore();
   const { clearAll: clearPlayers, addPlayer } = usePlayerStore();
   const { clearAll: clearCourts } = useCourtStore();
@@ -84,7 +86,12 @@ export default function SettingsScreen() {
     if (!matchAnnouncer) setVoiceDialogVisible(true);
     toggleMatchAnnouncer();
   };
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  // Checked once on launch (app/_layout.tsx); tapping the tile re-checks.
+  const {
+    latestVersion,
+    checking: checkingUpdate,
+    checkForUpdate,
+  } = useAppUpdateStore();
   // Newest release version when it's newer than this build — drives the download prompt.
   const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
   const [updateNotice, setUpdateNotice] = useState<{
@@ -94,12 +101,13 @@ export default function SettingsScreen() {
   const importReclubSheetRef = useRef<ImportReclubSheetRef>(null);
 
   const appVersion = Constants.expoConfig?.version ?? "";
+  const hasUpdate =
+    !!latestVersion && isNewerVersion(latestVersion, appVersion);
 
   const handleCheckForUpdate = async () => {
     if (checkingUpdate) return;
-    setCheckingUpdate(true);
     try {
-      const latest = await fetchLatestReleaseVersion();
+      const latest = await checkForUpdate();
       if (isNewerVersion(latest, appVersion)) {
         setAvailableUpdate(latest);
       } else {
@@ -113,8 +121,6 @@ export default function SettingsScreen() {
         title: "Couldn't check for updates",
         message: "Check your internet connection and try again.",
       });
-    } finally {
-      setCheckingUpdate(false);
     }
   };
 
@@ -330,6 +336,9 @@ export default function SettingsScreen() {
                           : announcerPitch < 1
                             ? "low pitch"
                             : "high pitch",
+                        announcerWarmupSec > 0
+                          ? `${announcerWarmupSec}s speaker delay`
+                          : null,
                         "tap to change",
                       ]
                         .filter(Boolean)
@@ -492,18 +501,48 @@ export default function SettingsScreen() {
                   description={
                     checkingUpdate
                       ? "Checking for updates…"
-                      : "Check for and download the latest version"
+                      : hasUpdate
+                        ? `v${latestVersion} is available. Tap to download`
+                        : latestVersion
+                          ? "You're on the latest version"
+                          : "Check for and download the latest version"
+                  }
+                  descriptionStyle={
+                    hasUpdate && !checkingUpdate
+                      ? { color: theme.colors.primary, fontWeight: "600" }
+                      : undefined
                   }
                   left={(props) => (
                     <List.Icon
                       {...props}
-                      icon="update"
+                      icon={hasUpdate ? "arrow-up-circle" : "update"}
                       color={theme.colors.primary}
                     />
                   )}
                   right={(props) =>
                     checkingUpdate ? (
                       <ActivityIndicator {...props} size="small" />
+                    ) : hasUpdate ? (
+                      <View
+                        style={{
+                          alignSelf: "center",
+                          backgroundColor: theme.colors.primary,
+                          borderRadius: 10,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                        testID="settings-update-available-badge"
+                      >
+                        <Text
+                          variant="labelSmall"
+                          style={{
+                            color: theme.colors.onPrimary,
+                            fontWeight: "700",
+                          }}
+                        >
+                          NEW
+                        </Text>
+                      </View>
                     ) : null
                   }
                   onPress={handleCheckForUpdate}

@@ -1,7 +1,7 @@
 import { useSessionStore } from "@/store/sessionStore";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Tabs } from "expo-router";
-import React from "react";
+import { Tabs, useRouter, useSegments } from "expo-router";
+import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { useTheme } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,17 @@ export default function TabLayout() {
   // Guests only ever get Court + Stack — Player/Settings drop out of the tab
   // bar entirely so there's no path to roster/settings screens.
   const isGuest = useSessionStore((s) => s.role === "guest");
+  const segments = useSegments();
+  const router = useRouter();
+  const currentTab = segments[segments.length - 1];
+
+  // A host who hands the session over (Switch Host) becomes a guest while
+  // possibly sitting on Players/Settings — move them off the now-hidden tab.
+  useEffect(() => {
+    if (isGuest && (currentTab === "player" || currentTab === "settings")) {
+      router.replace("/(tabs)/stack");
+    }
+  }, [isGuest, currentTab, router]);
 
   const BASE_TAB_HEIGHT = 56;
   const paddingBottom = insets.bottom + (Platform.OS === "ios" ? 4 : 8);

@@ -4,6 +4,7 @@ import {
   addPlayersBulk,
   dismissBottomSheet,
   goToPlayerTab,
+  goToStackTab,
   openPlayerActions,
   playerCard,
   playerCards,
@@ -127,9 +128,10 @@ test.describe("Players screen — roster management", () => {
     expect(names[1]).toContain("Zoe"); // now Idle, sorts after Available
   });
 
+  // Standings lives on the Stack screen (beside Match History), not here.
   test("standings dialog shows an empty state with no players", async ({ freshApp: page }) => {
-    await goToPlayerTab(page);
-    await page.getByTestId("player-standings-button").click();
+    await goToStackTab(page);
+    await page.getByTestId("stack-standings-button").click();
     await expect(page.getByTestId("player-standings-dialog")).toBeVisible();
     await expect(page.getByText("No match history yet.")).toBeVisible();
     await page.getByTestId("player-standings-close").click();
@@ -138,7 +140,8 @@ test.describe("Players screen — roster management", () => {
 
   test("standings dialog lists an added player with zero matches", async ({ freshApp: page }) => {
     await addPlayer(page, "Alice", "4.0");
-    await page.getByTestId("player-standings-button").click();
+    await goToStackTab(page);
+    await page.getByTestId("stack-standings-button").click();
     const dialog = page.getByTestId("player-standings-dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("1 players")).toBeVisible();

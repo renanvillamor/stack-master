@@ -11,6 +11,7 @@ import StackCard from "@/components/stack/StackCard";
 import GuestStackView from "@/components/stack/GuestStackView";
 import PlayerMatchHistoryDialog from "@/components/player/PlayerMatchHistoryDialog";
 import AllMatchHistoryDialog from "@/components/stack/AllMatchHistoryDialog";
+import PlayerStandingsDialog from "@/components/player/PlayerStandingsDialog";
 import GuestSessionBanner from "@/components/session/GuestSessionBanner";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -21,12 +22,13 @@ import { useStackStore } from "@/store/stackStore";
 import { Player, PlayerRating, Stack } from "@/types";
 import { announceMatch } from "@/utils/announcer";
 import { getStackGroup } from "@/utils/groupQueue";
+import { averagePlayerWaitMs } from "@/utils/matchLog";
 import { findLockedOutsideQuorum } from "@/utils/quorum";
 import {
   useIsSmallDevice,
   useResponsiveColumns,
 } from "@/hooks/useResponsiveColumns";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import { Button, Icon, IconButton, Text, useTheme } from "react-native-paper";
 
@@ -157,6 +159,8 @@ export default function StackScreen() {
   } = useStackStore();
   const { courts, addCourt } = useCourtStore();
   const { players, updatePlayerStatus } = usePlayerStore();
+  // Threshold for the StackCard "long wait" alert.
+  const avgWaitMs = useMemo(() => averagePlayerWaitMs(players), [players]);
   const { quorums, createQuorum, removeQuorum, removeQuorumForStack } =
     useQuorumStore();
   const { multiGroupStack, matchAnnouncer } = useSettingsStore();
@@ -185,6 +189,7 @@ export default function StackScreen() {
   } | null>(null);
   const [historyPlayer, setHistoryPlayer] = useState<Player | null>(null);
   const [allHistoryVisible, setAllHistoryVisible] = useState(false);
+  const [standingsVisible, setStandingsVisible] = useState(false);
   const [moveToStackDialog, setMoveToStackDialog] = useState<{
     fromStackId: string;
     playerId: string;
@@ -578,6 +583,7 @@ export default function StackScreen() {
       getPlayerLastPlayed={getPlayerLastPlayed}
       isPlayerLocked={isPlayerLocked}
       isRepeatTeam={isRepeatTeam}
+      longWaitMs={avgWaitMs}
       isUpNext={item.id === suggestedNextStackId}
       isPinned={item.id === pinnedStackId}
       isQuorum={isStackQuorum(item.id)}
@@ -666,6 +672,14 @@ export default function StackScreen() {
           iconColor={theme.colors.primary}
           style={{ backgroundColor: theme.colors.primaryContainer, margin: 0 }}
           testID="stack-match-history-button"
+        />
+        <IconButton
+          icon="trophy"
+          size={22}
+          onPress={() => setStandingsVisible(true)}
+          iconColor="#FFD700"
+          style={{ backgroundColor: "#FFD70020", margin: 0 }}
+          testID="stack-standings-button"
         />
       </View>
       {queuedStacks.length === 0 ? (
@@ -796,6 +810,12 @@ export default function StackScreen() {
         visible={allHistoryVisible}
         players={players}
         onDismiss={() => setAllHistoryVisible(false)}
+      />
+
+      <PlayerStandingsDialog
+        visible={standingsVisible}
+        players={players}
+        onDismiss={() => setStandingsVisible(false)}
       />
 
       <PlayerPickerDialog

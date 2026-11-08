@@ -8,6 +8,18 @@ const SAME_GAME_WINDOW_MS = 60_000;
 const lineupKey = (winnerIds: string[], loserIds: string[]) =>
   `${[...winnerIds].sort().join(",")}|${[...loserIds].sort().join(",")}`;
 
+/** Court-order teams from a saved lineup, plus which of them won. */
+function lineupFields(
+  teams: { team1: string[]; team2: string[] },
+  winnerIds: string[],
+): Pick<GameLogEntry, "team1Ids" | "team2Ids" | "winningTeam"> {
+  return {
+    team1Ids: teams.team1,
+    team2Ids: teams.team2,
+    winningTeam: teams.team1.some((id) => winnerIds.includes(id)) ? 1 : 2,
+  };
+}
+
 /**
  * Rebuilds the session's game log from every player's match history, newest
  * first. Each game is stored once per participant, so records are merged by
@@ -15,7 +27,11 @@ const lineupKey = (winnerIds: string[], loserIds: string[]) =>
  * up even if some of its players were deleted since.
  */
 export function buildGameLog(players: Player[]): GameLogEntry[] {
-  const games: (GameLogEntry & { key: string; time: number })[] = [];
+  const games: (GameLogEntry & {
+    key: string;
+    time: number;
+    hasLineup: boolean;
+  })[] = [];
 
   for (const player of players) {
     for (const record of player.history ?? []) {
@@ -35,6 +51,11 @@ export function buildGameLog(players: Player[]): GameLogEntry[] {
           existing.date = record.date;
         }
         existing.gameStartedAt ??= record.gameStartedAt ?? null;
+        if (!existing.hasLineup && record.teams) {
+          Object.assign(existing, lineupFields(record.teams, winnerIds), {
+            hasLineup: true,
+          });
+        }
         continue;
       }
       games.push({
@@ -44,13 +65,21 @@ export function buildGameLog(players: Player[]): GameLogEntry[] {
         gameStartedAt: record.gameStartedAt ?? null,
         winnerIds,
         loserIds,
+        hasLineup: !!record.teams,
+        ...(record.teams
+          ? lineupFields(record.teams, winnerIds)
+          : {
+              team1Ids: winnerIds,
+              team2Ids: loserIds,
+              winningTeam: 1 as const,
+            }),
       });
     }
   }
 
   return games
     .sort((a, b) => b.time - a.time)
-    .map(({ key, time, ...game }) => game);
+    .map(({ key, time, hasLineup, ...game }) => game);
 }
 
 export interface MatchLogStats {
@@ -84,6 +113,20 @@ export function computeMatchLogStats(
     )
     .filter((ms) => Number.isFinite(ms) && ms >= 0);
 
+  return {
+    avgMatchCount: mean(matchCounts),
+    avgGameMs: mean(gameDurations),
+    avgWaitMs: averagePlayerWaitMs(players),
+  };
+}
+
+/**
+ * Mean time a player sat out between consecutive games of theirs (previous
+ * game's end → next game's start), in ms, or null with no measurable gaps.
+ * Shared by the Match History "Average Player Wait" tile and the StackCard
+ * long-wait alert.
+ */
+export function averagePlayerWaitMs(players: Player[]): number | null {
   const waits: number[] = [];
   for (const player of players) {
     const history = [...(player.history ?? [])].sort(
@@ -98,9 +141,5 @@ export function computeMatchLogStats(
     }
   }
 
-  return {
-    avgMatchCount: mean(matchCounts),
-    avgGameMs: mean(gameDurations),
-    avgWaitMs: mean(waits),
-  };
+  return mean(waits);
 }

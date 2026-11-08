@@ -1,5 +1,6 @@
 import AlertDialog from "@/components/common/AlertDialog";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import HostTransferClaimDialog from "@/components/session/HostTransferClaimDialog";
 import { useSessionStore } from "@/store/sessionStore";
 import React, { useState } from "react";
 import { View } from "react-native";
@@ -11,8 +12,14 @@ import { Icon, Text, TouchableRipple, useTheme } from "react-native-paper";
  */
 export default function GuestSessionBanner() {
   const theme = useTheme();
-  const { sessionId, guestName, sessionEnded, leaveSession } =
-    useSessionStore();
+  const {
+    sessionId,
+    guestName,
+    sessionEnded,
+    handedOff,
+    leaveSession,
+    dismissTransferNotice,
+  } = useSessionStore();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   return (
@@ -60,6 +67,15 @@ export default function GuestSessionBanner() {
           leaveSession();
         }}
         onDismiss={() => setConfirmLeave(false)}
+      />
+
+      <HostTransferClaimDialog />
+
+      <AlertDialog
+        visible={!!handedOff && !sessionEnded}
+        title="Host Switched"
+        message={`${handedOff?.newHostName ?? "Another device"} is now the host. This device is watching the session.`}
+        onDismiss={dismissTransferNotice}
       />
 
       <AlertDialog

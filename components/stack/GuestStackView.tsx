@@ -1,9 +1,13 @@
 import StackCard from "@/components/stack/StackCard";
-import { useIsSmallDevice, useResponsiveColumns } from "@/hooks/useResponsiveColumns";
+import {
+  useIsSmallDevice,
+  useResponsiveColumns,
+} from "@/hooks/useResponsiveColumns";
 import { useSessionStore } from "@/store/sessionStore";
 import { Player, PlayerRating, Stack } from "@/types";
 import { getStackGroup } from "@/utils/groupQueue";
-import React from "react";
+import { averagePlayerWaitMs } from "@/utils/matchLog";
+import React, { useMemo } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
 import { Icon, Text, useTheme } from "react-native-paper";
 
@@ -107,6 +111,10 @@ export default function GuestStackView() {
   // (a per-viewer display preference) above.
   const multiGroupStack = snapshot?.multiGroupStack ?? false;
   const players: Player[] = snapshot?.players ?? [];
+  const avgWaitMs = useMemo(
+    () => averagePlayerWaitMs(snapshot?.players ?? []),
+    [snapshot?.players],
+  );
   const pinnedStackId = snapshot?.pinnedStackId ?? null;
   const quorums = snapshot?.quorums ?? [];
   const queuedStacks = (snapshot?.stacks ?? []).filter((s) => !s.courtId);
@@ -148,6 +156,7 @@ export default function GuestStackView() {
       getPlayerLastPlayed={getPlayerLastPlayed}
       isPlayerLocked={isPlayerLocked}
       isRepeatTeam={isRepeatTeam}
+      longWaitMs={avgWaitMs}
       isUpNext={item.id === suggestedNextStackId}
       isPinned={item.id === pinnedStackId}
       isQuorum={isStackQuorum(item.id)}

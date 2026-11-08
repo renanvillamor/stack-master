@@ -1,3 +1,4 @@
+import { useAppUpdateStore } from "@/store/appUpdateStore";
 import { useSessionStore } from "@/store/sessionStore";
 import { lightTheme } from "@/theme";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -20,6 +21,15 @@ export default function RootLayout() {
   // Resumes a previously-active host/guest session sync connection after an app restart.
   useEffect(() => {
     useSessionStore.getState().rehydrateConnection();
+  }, []);
+
+  // Quietly checks for a newer release so Settings → Update Version can flag
+  // it. A failed check (offline) is ignored; tapping the tile retries.
+  useEffect(() => {
+    useAppUpdateStore
+      .getState()
+      .checkForUpdate()
+      .catch(() => {});
   }, []);
 
   return (

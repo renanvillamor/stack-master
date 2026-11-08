@@ -1,4 +1,4 @@
-import { AnnouncerVoice } from "@/types";
+import { AnnouncerVoice, ReclubImportFile } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -13,6 +13,7 @@ interface SettingsState {
   setLandscapeColumns: (value: 1 | 2 | 3) => void;
   multiGroupStack: boolean;
   toggleMultiGroupStack: () => void;
+  setMultiGroupStack: (value: boolean) => void;
   /** Speak match call-outs aloud (StackCard announce button + auto-announce on court assignment). */
   matchAnnouncer: boolean;
   toggleMatchAnnouncer: () => void;
@@ -27,6 +28,12 @@ interface SettingsState {
   /** expo-speech pitch; 1.0 = engine normal. */
   announcerPitch: number;
   setAnnouncerPitch: (pitch: number) => void;
+  /** Seconds of muted speech played before each call-out so a Bluetooth speaker wakes up before the first words; 0 = off. */
+  announcerWarmupSec: number;
+  setAnnouncerWarmupSec: (seconds: number) => void;
+  /** Last file used for Import from Reclub; null = none picked yet. Per-device. */
+  reclubImportFile: ReclubImportFile | null;
+  setReclubImportFile: (file: ReclubImportFile | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -53,11 +60,16 @@ export const useSettingsStore = create<SettingsState>()(
           state.landscapeColumns = value;
         }),
 
-      multiGroupStack: true,
+      multiGroupStack: false,
 
       toggleMultiGroupStack: () =>
         set((state) => {
           state.multiGroupStack = !state.multiGroupStack;
+        }),
+
+      setMultiGroupStack: (value) =>
+        set((state) => {
+          state.multiGroupStack = value;
         }),
 
       matchAnnouncer: false,
@@ -86,6 +98,20 @@ export const useSettingsStore = create<SettingsState>()(
       setAnnouncerPitch: (pitch) =>
         set((state) => {
           state.announcerPitch = pitch;
+        }),
+
+      announcerWarmupSec: 0,
+
+      setAnnouncerWarmupSec: (seconds) =>
+        set((state) => {
+          state.announcerWarmupSec = seconds;
+        }),
+
+      reclubImportFile: null,
+
+      setReclubImportFile: (file) =>
+        set((state) => {
+          state.reclubImportFile = file;
         }),
     })),
     {

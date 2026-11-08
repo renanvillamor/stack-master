@@ -1,8 +1,10 @@
 import AlertDialog from "@/components/common/AlertDialog";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import HostTransferCodeDialog from "@/components/session/HostTransferCodeDialog";
 import JoinSessionModal from "@/components/settings/JoinSessionModal";
 import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
 import { useSessionStore } from "@/store/sessionStore";
+import { GuestPresence } from "@/types";
 import * as Clipboard from "expo-clipboard";
 import React, { useState } from "react";
 import { View } from "react-native";
@@ -19,18 +21,39 @@ import {
 export default function SessionSyncSection() {
   const theme = useTheme();
   const isSmallDevice = useIsSmallDevice();
-  const { role, sessionId, guestsPresent, startHosting, stopHosting } =
-    useSessionStore();
+  const {
+    role,
+    sessionId,
+    guestsPresent,
+    transferDeclinedBy,
+    startHosting,
+    stopHosting,
+    offerHostTransfer,
+    dismissTransferNotice,
+  } = useSessionStore();
   const [joinVisible, setJoinVisible] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const [startError, setStartError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<GuestPresence | null>(null);
+  const [switchError, setSwitchError] = useState(false);
 
   const handleStartHosting = async () => {
     try {
       await startHosting();
     } catch {
       setStartError(true);
+    }
+  };
+
+  const handleSwitchHost = async () => {
+    const guest = switchTarget;
+    setSwitchTarget(null);
+    if (!guest) return;
+    try {
+      await offerHostTransfer(guest);
+    } catch {
+      setSwitchError(true);
     }
   };
 
@@ -120,7 +143,17 @@ export default function SessionSyncSection() {
                     icon="account-circle-outline"
                     color={theme.colors.primary}
                   />
-                  <Text variant="bodyMedium">{g.name}</Text>
+                  <Text variant="bodyMedium" style={{ flex: 1 }}>
+                    {g.name}
+                  </Text>
+                  <IconButton
+                    icon="account-switch-outline"
+                    size={20}
+                    iconColor={theme.colors.primary}
+                    onPress={() => setSwitchTarget(g)}
+                    accessibilityLabel={`Make ${g.name} the host`}
+                    testID={`session-sync-switch-host-${g.id}`}
+                  />
                 </View>
               ))}
             </View>
@@ -188,6 +221,32 @@ export default function SessionSyncSection() {
           stopHosting();
         }}
         onDismiss={() => setConfirmStop(false)}
+      />
+
+      <ConfirmDialog
+        visible={!!switchTarget}
+        title="Switch Host"
+        message={`Hand this session over to ${switchTarget?.name}? You'll get a 4-digit code for them to enter on their device. Once they do, they run the session and this device switches to watching.`}
+        confirmLabel="Get Code"
+        destructive={false}
+        onConfirm={handleSwitchHost}
+        onDismiss={() => setSwitchTarget(null)}
+      />
+
+      <HostTransferCodeDialog />
+
+      <AlertDialog
+        visible={!!transferDeclinedBy}
+        title="Switch Host"
+        message={`${transferDeclinedBy} didn't take over hosting. You're still the host.`}
+        onDismiss={dismissTransferNotice}
+      />
+
+      <AlertDialog
+        visible={switchError}
+        title="Couldn't Switch Host"
+        message="Something went wrong starting the hand-over. Check your connection and try again."
+        onDismiss={() => setSwitchError(false)}
       />
 
       <AlertDialog
