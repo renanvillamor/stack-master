@@ -775,7 +775,7 @@ export default function PlayerScreen() {
       <AlertDialog
         visible={lockGroupMismatch}
         title="Skill Level Mismatch"
-        message="Locked pairs must be the same skill level — both Beginner or both Intermediate/Advanced. Update their ratings so the levels match, then try locking them again."
+        message="Locked pairs must be the same skill level — both Beginner or both Non-Beginner. Update their ratings so the levels match, then try locking them again."
         onDismiss={() => setLockGroupMismatch(false)}
       />
 

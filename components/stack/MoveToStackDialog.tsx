@@ -1,4 +1,7 @@
-import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
+import {
+  useIsSmallDevice,
+  useResponsiveColumns,
+} from "@/hooks/useResponsiveColumns";
 import { PlayerRating, Stack } from "@/types";
 import React from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
@@ -65,6 +68,11 @@ function PlayerRow({
   testID?: string;
 }) {
   const theme = useTheme();
+  // Each team box is only ~100px wide inside this dialog on a phone, so the
+  // name gets its own row (wrapping if it must) and the rating/lock drop
+  // below it, like StackCard/CourtCard do on phones.
+  const isSmallDevice = useIsSmallDevice();
+  const avatarSize = isSmallDevice ? 24 : 30;
 
   if (!playerId) {
     return (
@@ -78,9 +86,9 @@ function PlayerRow({
       >
         <View
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
+            width: avatarSize,
+            height: avatarSize,
+            borderRadius: avatarSize / 2,
             borderWidth: 1.5,
             borderColor: theme.colors.outline,
             borderStyle: "dashed",
@@ -97,55 +105,79 @@ function PlayerRow({
   }
 
   const rating = getPlayerRating(playerId);
-  const content = (
+  const avatar = (
     <View
       style={{
-        flexDirection: "row",
+        width: avatarSize,
+        height: avatarSize,
+        borderRadius: avatarSize / 2,
+        backgroundColor: accentColor + "28",
         alignItems: "center",
-        gap: 8,
-        paddingVertical: 2,
-        paddingHorizontal: 2,
-        opacity: isLocked && !onPress ? 0.5 : 1,
+        justifyContent: "center",
       }}
     >
-      <View
+      <Icon
+        source="account"
+        size={isSmallDevice ? 16 : 20}
+        color={accentColor}
+      />
+    </View>
+  );
+  const nameText = (
+    <Text
+      variant="bodyMedium"
+      style={{ color: theme.colors.onSurface, flex: 1 }}
+      numberOfLines={isSmallDevice ? 2 : 1}
+    >
+      {getPlayerName(playerId)}
+    </Text>
+  );
+  const ratingBadge = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+      <Icon
+        source="medal-outline"
+        size={11}
+        color={theme.colors.onSurfaceVariant}
+      />
+      <Text
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: accentColor + "28",
-          alignItems: "center",
-          justifyContent: "center",
+          color: theme.colors.onSurfaceVariant,
+          fontSize: 11,
+          fontWeight: "700",
         }}
       >
-        <Icon source="account" size={20} color={accentColor} />
-      </View>
-      <Text
-        variant="bodyMedium"
-        style={{ color: theme.colors.onSurface, flex: 1 }}
-        numberOfLines={1}
-      >
-        {getPlayerName(playerId)}
+        {formatRating(rating)}
       </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-        <Icon
-          source="medal-outline"
-          size={11}
-          color={theme.colors.onSurfaceVariant}
-        />
-        <Text
-          style={{
-            color: theme.colors.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: "700",
-          }}
-        >
-          {formatRating(rating)}
-        </Text>
+    </View>
+  );
+  const lockIcon = isLocked ? (
+    <Icon source="lock" size={13} color={theme.colors.onSurfaceVariant} />
+  ) : null;
+  const rowStyle = {
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+    opacity: isLocked && !onPress ? 0.5 : 1,
+  };
+  const content = isSmallDevice ? (
+    <View style={{ ...rowStyle, gap: 2 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        {avatar}
+        {nameText}
       </View>
-      {isLocked ? (
-        <Icon source="lock" size={13} color={theme.colors.onSurfaceVariant} />
-      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        {ratingBadge}
+        <View style={{ flex: 1 }} />
+        {lockIcon}
+      </View>
+    </View>
+  ) : (
+    <View
+      style={{ ...rowStyle, flexDirection: "row", alignItems: "center", gap: 8 }}
+    >
+      {avatar}
+      {nameText}
+      {ratingBadge}
+      {lockIcon}
     </View>
   );
 
@@ -182,6 +214,8 @@ export default function MoveToStackDialog({
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const numColumns = useResponsiveColumns();
+  const isSmallDevice = useIsSmallDevice();
+  const pad = isSmallDevice ? 8 : 16;
 
   const cardWidth =
     numColumns === 1 ? "100%" : numColumns === 2 ? "48.5%" : "31.5%";
@@ -200,7 +234,7 @@ export default function MoveToStackDialog({
           {movingPlayerName ? `Move ${movingPlayerName} to Stack` : "Move Player to Stack"}
         </Dialog.Title>
         <Dialog.ScrollArea style={{ paddingHorizontal: 0, maxHeight: "80%" }}>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+          <ScrollView contentContainerStyle={{ padding: pad, gap: 8 }}>
             {targetStacks.length === 0 ? (
               <View
                 style={{ alignItems: "center", paddingVertical: 24, gap: 8 }}
@@ -255,7 +289,10 @@ export default function MoveToStackDialog({
                       }}
                     >
                       <View
-                        style={{ paddingHorizontal: 16, paddingVertical: 12 }}
+                        style={{
+                          paddingHorizontal: isSmallDevice ? 10 : 16,
+                          paddingVertical: 12,
+                        }}
                       >
                         {/* Header */}
                         <View
@@ -355,7 +392,7 @@ export default function MoveToStackDialog({
                               flex: 1,
                               backgroundColor: TEAM1_COLOR + "0D",
                               borderRadius: 10,
-                              padding: 10,
+                              padding: isSmallDevice ? 8 : 10,
                               gap: 8,
                             }}
                           >
@@ -401,7 +438,7 @@ export default function MoveToStackDialog({
                             style={{
                               alignItems: "center",
                               justifyContent: "center",
-                              width: 28,
+                              width: isSmallDevice ? 20 : 28,
                             }}
                           >
                             <View
@@ -443,7 +480,7 @@ export default function MoveToStackDialog({
                               flex: 1,
                               backgroundColor: TEAM2_COLOR + "0D",
                               borderRadius: 10,
-                              padding: 10,
+                              padding: isSmallDevice ? 8 : 10,
                               gap: 8,
                             }}
                           >

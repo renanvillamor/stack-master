@@ -237,7 +237,7 @@ export default function GuestStackView() {
             }
           />
           <GuestGroupColumn
-            title="Intermediate/Advanced"
+            title="Non-Beginners"
             icon="arm-flex-outline"
             color="#3730A3"
             backgroundColor="#E0E7FF"

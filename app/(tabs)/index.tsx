@@ -22,6 +22,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { Court, Player, Stack } from "@/types";
 import { announceMatch } from "@/utils/announcer";
+import { nextCourtName } from "@/utils/courtName";
 import { checkQuorumsForPlayers } from "@/utils/quorum";
 import { useResponsiveColumns } from "@/hooks/useResponsiveColumns";
 import { useRouter } from "expo-router";
@@ -474,7 +475,9 @@ export default function CourtScreen() {
       <CourtFormModal
         visible={modalVisible}
         court={editingCourt}
-        defaultName={editingCourt ? "" : `Court ${courts.length + 1}`}
+        defaultName={
+          editingCourt ? "" : nextCourtName(courts.map((c) => c.name))
+        }
         onDismiss={() => setModalVisible(false)}
       />
 

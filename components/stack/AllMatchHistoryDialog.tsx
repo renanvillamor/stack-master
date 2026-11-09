@@ -1,3 +1,4 @@
+import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
 import { GameLogEntry, Player } from "@/types";
 import { buildGameLog, computeMatchLogStats } from "@/utils/matchLog";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -95,14 +96,27 @@ function formatGameTime(iso: string): string {
   });
 }
 
-/** One team as "Player1/Player2", tinted green if it won, red if it lost. */
-function TeamPill({ names, won }: { names: string; won: boolean }) {
+/**
+ * One team as "Player1/Player2", tinted green if it won, red if it lost.
+ * Inline (tablets) it stays on one line; `wrap` (phones) lets long names
+ * wrap at the "/" instead of truncating.
+ */
+function TeamPill({
+  names,
+  won,
+  wrap = false,
+}: {
+  names: string;
+  won: boolean;
+  wrap?: boolean;
+}) {
   const color = won ? WIN_COLOR : LOSS_COLOR;
   return (
     <View
       accessibilityLabel={`${names}, ${won ? "won" : "lost"}`}
       style={{
         flexShrink: 1,
+        ...(wrap && { alignSelf: "flex-start", maxWidth: "100%" }),
         backgroundColor: won ? WIN_BG : LOSS_BG,
         borderRadius: 6,
         paddingHorizontal: 8,
@@ -110,11 +124,13 @@ function TeamPill({ names, won }: { names: string; won: boolean }) {
       }}
     >
       <Text
-        variant="bodyMedium"
+        // Same size as the "vs"/"versus" label between the pills.
+        variant="labelMedium"
         style={{ color, fontWeight: "600" }}
-        numberOfLines={1}
+        numberOfLines={wrap ? undefined : 1}
       >
-        {names}
+        {/* A zero-width space after each "/" gives the line a break point there. */}
+        {wrap ? names.replace(/\//g, "/\u200B") : names}
       </Text>
     </View>
   );
@@ -128,6 +144,9 @@ export default function AllMatchHistoryDialog({
   const theme = useTheme();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+  // Phones are too narrow for "Team1 vs Team2" on one line in the Match
+  // column, so the teams stack: Team 1 / versus / Team 2.
+  const isSmallDevice = useIsSmallDevice();
 
   const games = useMemo(
     () => (visible ? buildGameLog(players) : []),
@@ -185,28 +204,33 @@ export default function AllMatchHistoryDialog({
       >
         {formatGameTime(item.date)}
       </Text>
-      {/* Teams in court order: Team 1 vs Team 2 */}
+      {/* Teams in court order: Team 1 vs Team 2 (stacked on phones) */}
       <View
         style={{
           flex: 1,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
+          flexDirection: isSmallDevice ? "column" : "row",
+          alignItems: isSmallDevice ? "flex-start" : "center",
+          gap: isSmallDevice ? 2 : 6,
         }}
       >
         <TeamPill
           names={teamNames(item.team1Ids)}
           won={item.winningTeam === 1}
+          wrap={isSmallDevice}
         />
         <Text
           variant="labelMedium"
-          style={{ color: theme.colors.onSurfaceVariant }}
+          style={{
+            color: theme.colors.onSurfaceVariant,
+            ...(isSmallDevice && { paddingLeft: 8 }),
+          }}
         >
-          vs
+          {isSmallDevice ? "versus" : "vs"}
         </Text>
         <TeamPill
           names={teamNames(item.team2Ids)}
           won={item.winningTeam === 2}
+          wrap={isSmallDevice}
         />
       </View>
       <Text

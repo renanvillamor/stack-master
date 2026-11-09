@@ -30,7 +30,7 @@ import {
 } from "@/hooks/useResponsiveColumns";
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
-import { Button, Icon, IconButton, Text, useTheme } from "react-native-paper";
+import { Icon, IconButton, Text, useTheme } from "react-native-paper";
 
 interface GroupColumnProps {
   title: string;
@@ -655,15 +655,15 @@ export default function StackScreen() {
         }}
       >
         {canAutoFill && (
-          <Button
-            mode="contained-tonal"
+          <IconButton
             icon="auto-fix"
+            size={22}
             onPress={() => autoFillQueue()}
-            style={{ flex: 1 }}
+            iconColor={theme.colors.primary}
+            style={{ backgroundColor: theme.colors.primaryContainer, margin: 0 }}
+            accessibilityLabel="Auto-fill vacant slots"
             testID="stack-autofill"
-          >
-            Auto-fill vacant slots
-          </Button>
+          />
         )}
         <IconButton
           icon="history"
@@ -722,7 +722,7 @@ export default function StackScreen() {
               }
             />
             <GroupColumn
-              title="Intermediate/Advanced"
+              title="Non-Beginners"
               icon="arm-flex-outline"
               color="#3730A3"
               backgroundColor="#E0E7FF"

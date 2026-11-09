@@ -4,7 +4,7 @@ import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { parseReclubParticipants } from "@/utils/reclub";
-import { pickReclubFile, readReclubFile } from "@/utils/reclubFile";
+import { fetchReclubText } from "@/utils/reclubLink";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   BottomSheetBackdrop,
@@ -24,7 +24,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Platform, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import {
   Button,
   Divider,
@@ -49,7 +49,7 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   const { addPlayer, clearAll: clearPlayers } = usePlayerStore();
   const { clearAll: clearStacks } = useStackStore();
   const { clearAll: clearQuorums } = useQuorumStore();
-  const { reclubImportFile, setReclubImportFile } = useSettingsStore();
+  const { reclubImportLink, setReclubImportLink } = useSettingsStore();
 
   const [text, setText] = useState("");
   const [inputKey, setInputKey] = useState(0);
@@ -59,8 +59,16 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   const [inputSeed, setInputSeed] = useState("");
   const [deselected, setDeselected] = useState<Set<number>>(new Set());
   const [pendingNames, setPendingNames] = useState<string[] | null>(null);
-  const [loadingFile, setLoadingFile] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
+  // The link field is uncontrolled like the paste box (same Android cursor
+  // race): it starts from the saved link and remounts via linkKey.
+  const [linkInput, setLinkInput] = useState(reclubImportLink);
+  const [linkKey, setLinkKey] = useState(0);
+  const [loadingLink, setLoadingLink] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  // Saved settings rehydrate asynchronously; pick the link up once they do.
+  useEffect(() => {
+    setLinkInput(reclubImportLink);
+  }, [reclubImportLink]);
 
   useImperativeHandle(ref, () => ({
     present: () => sheetRef.current?.present(),
@@ -113,7 +121,9 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
     setInputSeed("");
     setInputKey((k) => k + 1);
     setDeselected(new Set());
-    setFileError(null);
+    setLinkInput(reclubImportLink);
+    setLinkKey((k) => k + 1);
+    setLinkError(null);
   };
 
   // The input is uncontrolled, so loaded text goes in through a remount.
@@ -123,37 +133,30 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
     setInputKey((k) => k + 1);
   };
 
-  // Opens the picker where the saved file lives, so the location is
-  // remembered even when the user picks a different file this time.
-  const handleChooseFile = async () => {
-    setFileError(null);
-    setLoadingFile(true);
+  // The link is saved as soon as it's used, so it's there next time even if
+  // this load fails (e.g. offline at the venue).
+  const handleLoadLink = async () => {
+    const link = linkInput.trim();
+    if (!link) return;
+    setReclubImportLink(link);
+    setLinkError(null);
+    setLoadingLink(true);
     try {
-      const result = await pickReclubFile(reclubImportFile?.uri);
-      if (result) {
-        setReclubImportFile(result.file);
-        showLoadedText(result.text);
-      }
-    } catch {
-      setFileError("Couldn't read that file. Choose a plain text (.txt) file.");
+      showLoadedText(await fetchReclubText(link));
+    } catch (err) {
+      setLinkError(
+        err instanceof Error ? err.message : "Couldn't load that link.",
+      );
     } finally {
-      setLoadingFile(false);
+      setLoadingLink(false);
     }
   };
 
-  const handleReloadFile = async () => {
-    if (!reclubImportFile) return;
-    setFileError(null);
-    setLoadingFile(true);
-    try {
-      showLoadedText(await readReclubFile(reclubImportFile.uri));
-    } catch {
-      setFileError(
-        `Couldn't open ${reclubImportFile.label}. It may have been moved or deleted, or this phone is offline. Choose the file again.`,
-      );
-    } finally {
-      setLoadingFile(false);
-    }
+  const handleClearLink = () => {
+    setReclubImportLink("");
+    setLinkInput("");
+    setLinkKey((k) => k + 1);
+    setLinkError(null);
   };
 
   const renderBackdrop = useCallback(
@@ -247,7 +250,7 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
               style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
             >
               Paste the session details you copied from Reclub, or load them
-              from a .txt file (e.g. on Google Drive). Names
+              from a link to a .txt file (e.g. Google Drive). Names
               listed under &quot;Participants&quot; will replace your
               current player roster and queue. Courts are kept.
             </Text>
@@ -255,60 +258,65 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
           <Divider />
 
           <View style={{ padding: 20, paddingBottom: 12, gap: 12 }}>
-            {/* expo-file-system's picker is native-only. */}
-            {Platform.OS !== "web" && (
-              <View style={{ gap: 4 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  {reclubImportFile && (
-                    <Button
-                      mode="contained-tonal"
-                      icon="file-refresh-outline"
-                      onPress={handleReloadFile}
-                      disabled={loadingFile}
-                      style={{ flexShrink: 1 }}
-                      labelStyle={{ marginHorizontal: 12 }}
-                      testID="import-reclub-reload-file"
-                    >
-                      {`Load ${reclubImportFile.label}`}
-                    </Button>
-                  )}
-                  <Button
-                    mode="outlined"
-                    icon="file-document-outline"
-                    onPress={handleChooseFile}
-                    loading={loadingFile}
-                    disabled={loadingFile}
-                    testID="import-reclub-choose-file"
-                  >
-                    {reclubImportFile ? "Choose…" : "Load from File"}
-                  </Button>
-                  {reclubImportFile && (
+            <View style={{ gap: 4 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <View style={{ flex: 1, justifyContent: "center" }}>
+                  <BottomSheetTextInput
+                    key={linkKey}
+                    defaultValue={reclubImportLink}
+                    onChangeText={setLinkInput}
+                    placeholder="Google Drive link to a .txt file"
+                    placeholderTextColor={theme.colors.onSurfaceVariant}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    returnKeyType="go"
+                    onSubmitEditing={handleLoadLink}
+                    editable={!loadingLink}
+                    testID="import-reclub-link-input"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.colors.outlineVariant,
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      paddingLeft: 12,
+                      paddingRight: linkInput ? 36 : 12,
+                      color: theme.colors.onSurface,
+                      backgroundColor: theme.colors.surfaceVariant + "40",
+                      fontSize: 14,
+                    }}
+                  />
+                  {!!linkInput && (
                     <IconButton
                       icon="close"
-                      size={18}
-                      onPress={() => setReclubImportFile(null)}
-                      disabled={loadingFile}
-                      accessibilityLabel="Forget saved file"
-                      testID="import-reclub-forget-file"
+                      size={16}
+                      onPress={handleClearLink}
+                      disabled={loadingLink}
+                      accessibilityLabel="Clear saved link"
+                      testID="import-reclub-clear-link"
+                      style={{ position: "absolute", right: 0, margin: 0 }}
                     />
                   )}
                 </View>
-                {fileError && (
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: theme.colors.error }}
-                  >
-                    {fileError}
-                  </Text>
-                )}
+                <Button
+                  mode="contained-tonal"
+                  icon="download"
+                  onPress={handleLoadLink}
+                  loading={loadingLink}
+                  disabled={!linkInput.trim() || loadingLink}
+                  testID="import-reclub-load-link"
+                >
+                  Load
+                </Button>
               </View>
-            )}
+              {linkError && (
+                <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                  {linkError}
+                </Text>
+              )}
+            </View>
             {/* BottomSheetTextInput, not RN's TextInput, so the sheet's
                 keyboard handling cooperates with it. Deliberately
                 uncontrolled (no `value`): echoing every keystroke back
@@ -319,7 +327,7 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
               key={inputKey}
               defaultValue={inputSeed}
               onChangeText={setText}
-              placeholder="Paste Reclub data here..."
+              placeholder="...or paste Reclub data here"
               placeholderTextColor={theme.colors.onSurfaceVariant}
               multiline
               textAlignVertical="top"

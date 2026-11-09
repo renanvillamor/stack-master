@@ -82,8 +82,9 @@ export default function PlayerFormModal({
         </Text>
 
         <TextInput
-          label="Player Name(s) (comma separated)"
-          placeholder="e.g. Alice, Bob, Charlie"
+          // Comma-separated bulk add only applies to adding; an edit renames one player.
+          label={player ? "Player Name" : "Player Name(s) (comma separated)"}
+          placeholder={player ? "e.g. Alice" : "e.g. Alice, Bob, Charlie"}
           value={name}
           onChangeText={setName}
           mode="outlined"

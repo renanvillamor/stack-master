@@ -25,6 +25,24 @@ export interface MatchRecord {
   teams?: { team1: string[]; team2: string[] };
 }
 
+/** One leaderboard row, derived by utils/standings.ts — never stored. */
+export interface StandingRow {
+  player: Player;
+  wins: number;
+  losses: number;
+  matches: number;
+  /** 1-based competition rank (1, 2, 2, 4); null for players with no games, who aren't ranked. */
+  rank: number | null;
+  /** True when another player has the same record, and so the same rank. */
+  tied: boolean;
+  /**
+   * What puts this player above the next rank down, for the explainer line:
+   * "wins" = more wins, "losses" = same wins but fewer losses. null for the
+   * last ranked group (nobody below) and unranked players.
+   */
+  edge: { by: "wins" | "losses"; margin: number; over: string[] } | null;
+}
+
 // One finished game, reconstructed from the 4 players' MatchRecords (there is
 // no separate game log — see utils/matchLog.ts).
 export interface GameLogEntry {
@@ -104,14 +122,6 @@ export interface Quorum {
   /** The stack currently holding all 4 members together, or null while still waiting on someone. */
   stackId: string | null;
   createdAt: string;
-}
-
-/** A text file picked for Import from Reclub, remembered so it can be re-read (or the picker reopened there) next time. */
-export interface ReclubImportFile {
-  /** Android content:// URI the app holds a persisted read permission for. */
-  uri: string;
-  /** Human-readable name for the UI (Drive URIs carry no filename). */
-  label: string;
 }
 
 // ─── Session Sync ────────────────────────────────────────────────────────────

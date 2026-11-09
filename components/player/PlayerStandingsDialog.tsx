@@ -1,4 +1,6 @@
-import { Player, PlayerRating } from "@/types";
+import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
+import { Player, PlayerRating, StandingRow } from "@/types";
+import { computeStandings, describeEdge } from "@/utils/standings";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { FlatList, useWindowDimensions, View } from "react-native";
@@ -10,17 +12,11 @@ interface PlayerStandingsDialogProps {
   onDismiss: () => void;
 }
 
-interface StandingRow {
-  player: Player;
-  wins: number;
-  losses: number;
-  matches: number;
-}
-
+// Keyed by rank, not row position, so tied players share a medal.
 const RANK_MEDAL: Record<number, { icon: string; color: string }> = {
-  0: { icon: "medal", color: "#FFD700" },
-  1: { icon: "medal", color: "#C0C0C0" },
-  2: { icon: "medal", color: "#CD7F32" },
+  1: { icon: "medal", color: "#FFD700" },
+  2: { icon: "medal", color: "#C0C0C0" },
+  3: { icon: "medal", color: "#CD7F32" },
 };
 
 export default function PlayerStandingsDialog({
@@ -32,22 +28,15 @@ export default function PlayerStandingsDialog({
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
-  const standings: StandingRow[] = useMemo(() => {
-    return players
-      .map((player) => ({
-        player,
-        wins: player.history.filter((r) => r.result === "win").length,
-        losses: player.history.filter((r) => r.result === "loss").length,
-        matches: player.matches,
-      }))
-      .sort((a, b) => {
-        if (b.wins !== a.wins) return b.wins - a.wins;
-        if (b.matches !== a.matches) return b.matches - a.matches;
-        return a.player.name.localeCompare(b.player.name);
-      });
-  }, [players]);
+  const standings: StandingRow[] = useMemo(
+    () => computeStandings(players),
+    [players],
+  );
 
-  const COL_W = 64;
+  // Phones get narrow GP/W/L columns so the name column keeps its room.
+  const isSmallDevice = useIsSmallDevice();
+  const COL_W = isSmallDevice ? 36 : 56;
+  const RANK_W = 44;
 
   function formatRating(rating: PlayerRating): string {
     return rating === "NR" ? "NR" : rating.toFixed(1);
@@ -98,6 +87,31 @@ export default function PlayerStandingsDialog({
           />
         </View>
 
+        {/* How the ranking works */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            backgroundColor: theme.colors.primaryContainer,
+          }}
+          testID="player-standings-legend"
+        >
+          <MaterialCommunityIcons
+            name="information-outline"
+            size={14}
+            color={theme.colors.onPrimaryContainer}
+          />
+          <Text
+            variant="labelSmall"
+            style={{ color: theme.colors.onPrimaryContainer, flex: 1 }}
+          >
+            Ranked by most wins, then fewest losses. Same record, same rank (T).
+          </Text>
+        </View>
+
         {/* Column headers */}
         <View
           style={{
@@ -111,10 +125,23 @@ export default function PlayerStandingsDialog({
           <Text
             variant="labelSmall"
             style={{
+              width: RANK_W,
+              textAlign: "center",
+              color: theme.colors.onSurfaceVariant,
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+            }}
+          >
+            Rank
+          </Text>
+          <Text
+            variant="labelSmall"
+            style={{
               flex: 1,
               color: theme.colors.onSurfaceVariant,
               textTransform: "uppercase",
               letterSpacing: 0.8,
+              marginLeft: 4,
             }}
           >
             Player
@@ -129,7 +156,7 @@ export default function PlayerStandingsDialog({
               letterSpacing: 0.8,
             }}
           >
-            Matches
+            {isSmallDevice ? "GP" : "Games"}
           </Text>
           <Text
             variant="labelSmall"
@@ -141,7 +168,7 @@ export default function PlayerStandingsDialog({
               letterSpacing: 0.8,
             }}
           >
-            Wins
+            {isSmallDevice ? "W" : "Wins"}
           </Text>
           <Text
             variant="labelSmall"
@@ -153,7 +180,7 @@ export default function PlayerStandingsDialog({
               letterSpacing: 0.8,
             }}
           >
-            Losses
+            {isSmallDevice ? "L" : "Losses"}
           </Text>
         </View>
         <Divider />
@@ -175,16 +202,15 @@ export default function PlayerStandingsDialog({
               </Text>
             }
             renderItem={({ item, index }) => {
-              const medal = RANK_MEDAL[index];
-              const isTop = index === 0;
+              const medal = item.rank ? RANK_MEDAL[item.rank] : undefined;
+              const isTop = item.rank === 1;
+              const edgeText = describeEdge(item);
               return (
                 <View
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
                     paddingHorizontal: 16,
                     paddingVertical: 12,
-                    gap: 4,
+                    gap: 2,
                     backgroundColor: isTop
                       ? "#FFD70014"
                       : index % 2 === 0
@@ -194,96 +220,130 @@ export default function PlayerStandingsDialog({
                     borderLeftColor: "#FFD700",
                   }}
                 >
-                  {/* Rank / medal */}
                   <View
-                    style={{
-                      width: 28,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                   >
-                    {medal ? (
-                      <MaterialCommunityIcons
-                        name={medal.icon as any}
-                        size={20}
-                        color={medal.color}
-                      />
-                    ) : (
+                    {/* Rank: medal for the top 3 ranks, "T" prefix when tied, "—" when unranked (no games) */}
+                    <View
+                      style={{
+                        width: RANK_W,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 2,
+                      }}
+                      accessibilityLabel={
+                        item.rank
+                          ? `${item.tied ? "Tied for " : "Rank "}${item.rank}`
+                          : "Unranked, no games yet"
+                      }
+                      testID={`player-standings-rank-${item.player.id}`}
+                    >
+                      {medal && (
+                        <MaterialCommunityIcons
+                          name={medal.icon as any}
+                          size={16}
+                          color={medal.color}
+                        />
+                      )}
                       <Text
-                        variant="labelSmall"
-                        style={{ color: theme.colors.onSurfaceVariant }}
+                        variant="labelMedium"
+                        style={{
+                          color: item.rank
+                            ? theme.colors.onSurface
+                            : theme.colors.onSurfaceVariant,
+                          fontWeight: "700",
+                        }}
                       >
-                        {index + 1}
+                        {item.rank
+                          ? `${item.tied ? "T" : ""}${item.rank}`
+                          : "—"}
                       </Text>
-                    )}
-                  </View>
+                    </View>
 
-                  {/* Name + rating */}
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {/* Name + rating */}
+                    <View style={{ flex: 1, marginLeft: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text
+                          variant="bodyMedium"
+                          style={{
+                            fontWeight: isTop ? "800" : "600",
+                            color: isTop ? theme.colors.primary : theme.colors.onSurface,
+                            flexShrink: 1,
+                          }}
+                          numberOfLines={2}
+                        >
+                          {item.player.name}
+                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                          <MaterialCommunityIcons
+                            name="medal-outline"
+                            size={11}
+                            color={theme.colors.onSurfaceVariant}
+                          />
+                          <Text
+                            variant="labelSmall"
+                            style={{ color: theme.colors.onSurfaceVariant, fontWeight: "600" }}
+                          >
+                            {formatRating(item.player.rating)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Matches */}
                     <Text
                       variant="bodyMedium"
                       style={{
-                        fontWeight: isTop ? "800" : "600",
-                        color: isTop ? theme.colors.primary : theme.colors.onSurface,
-                        flexShrink: 1,
+                        width: COL_W,
+                        textAlign: "center",
+                        color: theme.colors.onSurfaceVariant,
+                        fontWeight: "600",
                       }}
-                      numberOfLines={1}
                     >
-                      {item.player.name}
+                      {item.matches}
                     </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                      <MaterialCommunityIcons
-                        name="medal-outline"
-                        size={11}
-                        color={theme.colors.onSurfaceVariant}
-                      />
-                      <Text
-                        variant="labelSmall"
-                        style={{ color: theme.colors.onSurfaceVariant, fontWeight: "600" }}
-                      >
-                        {formatRating(item.player.rating)}
-                      </Text>
-                    </View>
+
+                    {/* Wins */}
+                    <Text
+                      variant="bodyMedium"
+                      style={{
+                        width: COL_W,
+                        textAlign: "center",
+                        color: "#15803D",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {item.wins}
+                    </Text>
+
+                    {/* Losses */}
+                    <Text
+                      variant="bodyMedium"
+                      style={{
+                        width: COL_W,
+                        textAlign: "center",
+                        color: "#B91C1C",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {item.losses}
+                    </Text>
                   </View>
 
-                  {/* Matches */}
-                  <Text
-                    variant="bodyMedium"
-                    style={{
-                      width: COL_W,
-                      textAlign: "center",
-                      color: theme.colors.onSurfaceVariant,
-                      fontWeight: "600",
-                    }}
-                  >
-                    {item.matches}
-                  </Text>
-
-                  {/* Wins */}
-                  <Text
-                    variant="bodyMedium"
-                    style={{
-                      width: COL_W,
-                      textAlign: "center",
-                      color: "#15803D",
-                      fontWeight: "700",
-                    }}
-                  >
-                    {item.wins}
-                  </Text>
-
-                  {/* Losses */}
-                  <Text
-                    variant="bodyMedium"
-                    style={{
-                      width: COL_W,
-                      textAlign: "center",
-                      color: "#B91C1C",
-                      fontWeight: "700",
-                    }}
-                  >
-                    {item.losses}
-                  </Text>
+                  {/* Why they're ahead of the next rank, on its own full-width line under the name */}
+                  {edgeText && (
+                    <Text
+                      variant="labelSmall"
+                      style={{
+                        color: theme.colors.onSurfaceVariant,
+                        marginLeft: RANK_W + 8,
+                      }}
+                      testID={`player-standings-edge-${item.player.id}`}
+                    >
+                      {edgeText}
+                    </Text>
+                  )}
                 </View>
               );
             }}

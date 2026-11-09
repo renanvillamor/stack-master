@@ -17,34 +17,33 @@ interface PlayerMatchHistoryDialogProps {
   onDismiss: () => void;
 }
 
+/**
+ * One game from this player's side: result chip, then partner and opponents
+ * on their own lines (names wrap rather than truncate on phones), with the
+ * time and date stacked on the right. The player's own name is the dialog
+ * title, so it isn't repeated here.
+ */
 function HistoryRow({
   record,
-  playerName,
   getPlayerName,
 }: {
   record: MatchRecord;
-  playerName: string;
   getPlayerName: (id: string) => string;
 }) {
   const theme = useTheme();
   const isWin = record.result === "win";
   const date = new Date(record.date);
-  const dateStr =
-    date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }) +
-    " " +
-    date.toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const timeStr = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const dateStr = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 
   const teammates = (record.teammateIds ?? []).map(getPlayerName).join(" / ");
   const opponents = (record.opponentIds ?? []).map(getPlayerName).join(" / ");
-  const myTeam = [playerName, teammates].filter(Boolean).join(" / ");
-  const allNames = [myTeam, opponents].filter(Boolean).join("   VERSUS   ");
 
   return (
     <View
@@ -53,7 +52,7 @@ function HistoryRow({
         alignItems: "center",
         paddingVertical: 10,
         paddingHorizontal: 4,
-        gap: 8,
+        gap: 10,
       }}
     >
       <Chip
@@ -71,20 +70,31 @@ function HistoryRow({
       >
         {isWin ? "WIN" : "LOSS"}
       </Chip>
-      <Text
-        variant="bodySmall"
-        style={{ color: theme.colors.onSurface, flex: 1 }}
-        numberOfLines={1}
-      >
-        {allNames}
-      </Text>
-      <Text
-        variant="bodySmall"
-        style={{ color: theme.colors.onSurfaceVariant }}
-        numberOfLines={1}
-      >
-        {dateStr}
-      </Text>
+      <View style={{ flex: 1, gap: 2 }}>
+        {!!teammates && (
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+            <Text style={{ color: theme.colors.onSurfaceVariant }}>with </Text>
+            {teammates}
+          </Text>
+        )}
+        {!!opponents && (
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+            <Text style={{ color: theme.colors.onSurfaceVariant }}>vs </Text>
+            {opponents}
+          </Text>
+        )}
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurface }}>
+          {timeStr}
+        </Text>
+        <Text
+          variant="labelSmall"
+          style={{ color: theme.colors.onSurfaceVariant }}
+        >
+          {dateStr}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -211,11 +221,7 @@ export default function PlayerMatchHistoryDialog({
               style={{ maxHeight: 240 }}
               ItemSeparatorComponent={() => <Divider />}
               renderItem={({ item }) => (
-                <HistoryRow
-                  record={item}
-                  playerName={player.name}
-                  getPlayerName={getPlayerName}
-                />
+                <HistoryRow record={item} getPlayerName={getPlayerName} />
               )}
             />
           )}
