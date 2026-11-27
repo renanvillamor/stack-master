@@ -2,7 +2,7 @@
   "expo": {
     "name": "StackMaster",
     "slug": "StackMaster",
-    "version": "1.3.5",
+    "version": "1.3.6",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "stackmaster",
@@ -25,7 +25,7 @@
       "predictiveBackGestureEnabled": false,
       "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "package": "com.amawachoya.StackMaster",
-      "versionCode": 9
+      "versionCode": 10
     },
     "web": {
       "bundler": "metro",
