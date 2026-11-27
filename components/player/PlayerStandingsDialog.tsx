@@ -35,7 +35,11 @@ export default function PlayerStandingsDialog({
 
   // Phones get narrow GP/W/L columns so the name column keeps its room.
   const isSmallDevice = useIsSmallDevice();
-  const COL_W = isSmallDevice ? 36 : 56;
+  const COL_W = isSmallDevice ? 32 : 56;
+  const RATE_W = isSmallDevice ? 46 : 64;
+
+  const formatWinRate = (rate: number | null) =>
+    rate === null ? "—" : `${Math.round(rate * 100)}%`;
   const RANK_W = 44;
 
   function formatRating(rating: PlayerRating): string {
@@ -108,7 +112,8 @@ export default function PlayerStandingsDialog({
             variant="labelSmall"
             style={{ color: theme.colors.onPrimaryContainer, flex: 1 }}
           >
-            Ranked by most wins, then fewest losses. Same record, same rank (T).
+            Ranked by most wins, then fewest losses. Players with the same
+            record share a rank.
           </Text>
         </View>
 
@@ -182,6 +187,18 @@ export default function PlayerStandingsDialog({
           >
             {isSmallDevice ? "L" : "Losses"}
           </Text>
+          <Text
+            variant="labelSmall"
+            style={{
+              width: RATE_W,
+              textAlign: "center",
+              color: theme.colors.primary,
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+            }}
+          >
+            {isSmallDevice ? "Win%" : "Win Rate"}
+          </Text>
         </View>
         <Divider />
 
@@ -202,18 +219,24 @@ export default function PlayerStandingsDialog({
               </Text>
             }
             renderItem={({ item, index }) => {
-              const medal = item.rank ? RANK_MEDAL[item.rank] : undefined;
+              // Only a tie group's first row shows its rank, medal and
+              // caption; the blank rank cells under it mark the tie.
+              const showRank = item.firstInRank;
+              const medal =
+                item.rank && showRank ? RANK_MEDAL[item.rank] : undefined;
               const isTop = item.rank === 1;
-              const edgeText = describeEdge(item);
+              const edgeText = showRank ? describeEdge(item) : null;
               return (
                 <View
                   style={{
                     paddingHorizontal: 16,
                     paddingVertical: 12,
                     gap: 2,
+                    // Striped per rank group, not per row, so tied players
+                    // share a background (unranked rows stripe by row).
                     backgroundColor: isTop
                       ? "#FFD70014"
-                      : index % 2 === 0
+                      : (item.rank ?? index + 1) % 2 === 1
                         ? theme.colors.surface
                         : theme.colors.surfaceVariant + "30",
                     borderLeftWidth: isTop ? 3 : 0,
@@ -223,7 +246,7 @@ export default function PlayerStandingsDialog({
                   <View
                     style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                   >
-                    {/* Rank: medal for the top 3 ranks, "T" prefix when tied, "—" when unranked (no games) */}
+                    {/* Rank: medal for the top 3 ranks, number on a tie group's first row only, "—" when unranked (no games) */}
                     <View
                       style={{
                         width: RANK_W,
@@ -234,7 +257,7 @@ export default function PlayerStandingsDialog({
                       }}
                       accessibilityLabel={
                         item.rank
-                          ? `${item.tied ? "Tied for " : "Rank "}${item.rank}`
+                          ? `${item.tied ? "Tied for rank " : "Rank "}${item.rank}`
                           : "Unranked, no games yet"
                       }
                       testID={`player-standings-rank-${item.player.id}`}
@@ -255,15 +278,23 @@ export default function PlayerStandingsDialog({
                           fontWeight: "700",
                         }}
                       >
-                        {item.rank
-                          ? `${item.tied ? "T" : ""}${item.rank}`
-                          : "—"}
+                        {item.rank ? (showRank ? item.rank : "") : "—"}
                       </Text>
                     </View>
 
                     {/* Name + rating */}
                     <View style={{ flex: 1, marginLeft: 4 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      {/* flexWrap: on phones a long name pushes the rating
+                          badge onto the next line instead of overlapping the
+                          stat columns. */}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          columnGap: 6,
+                        }}
+                      >
                         <Text
                           variant="bodyMedium"
                           style={{
@@ -328,6 +359,23 @@ export default function PlayerStandingsDialog({
                       }}
                     >
                       {item.losses}
+                    </Text>
+
+                    {/* Win rate (display only; ranking is wins, then losses) */}
+                    <Text
+                      variant="bodyMedium"
+                      style={{
+                        width: RATE_W,
+                        textAlign: "center",
+                        color:
+                          item.winRate === null
+                            ? theme.colors.onSurfaceVariant
+                            : theme.colors.primary,
+                        fontWeight: "700",
+                      }}
+                      testID={`player-standings-winrate-${item.player.id}`}
+                    >
+                      {formatWinRate(item.winRate)}
                     </Text>
                   </View>
 

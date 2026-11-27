@@ -31,10 +31,14 @@ export interface StandingRow {
   wins: number;
   losses: number;
   matches: number;
-  /** 1-based competition rank (1, 2, 2, 4); null for players with no games, who aren't ranked. */
+  /** wins / matches (0–1); null for players with no games. Shown only, not used for ranking. */
+  winRate: number | null;
+  /** 1-based rank that counts groups, not players: two players tied for 1st are both 1, and the next is 2. null for players with no games, who aren't ranked. */
   rank: number | null;
   /** True when another player has the same record, and so the same rank. */
   tied: boolean;
+  /** First row of its rank group — the only one that shows the rank number, medal and caption, so a blank rank cell below it reads as a tie. */
+  firstInRank: boolean;
   /**
    * What puts this player above the next rank down, for the explainer line:
    * "wins" = more wins, "losses" = same wins but fewer losses. null for the
@@ -122,6 +126,14 @@ export interface Quorum {
   /** The stack currently holding all 4 members together, or null while still waiting on someone. */
   stackId: string | null;
   createdAt: string;
+}
+
+/** A device/cloud file picked for Import from Reclub, remembered so it can be re-read (or the picker reopened there) next time. */
+export interface ReclubImportFile {
+  /** Android content:// URI the app holds a persisted read permission for. */
+  uri: string;
+  /** Human-readable name for the UI (Drive URIs carry no filename). */
+  label: string;
 }
 
 // ─── Session Sync ────────────────────────────────────────────────────────────

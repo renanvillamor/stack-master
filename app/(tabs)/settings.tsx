@@ -5,9 +5,8 @@ import SessionSyncSection from "@/components/settings/SessionSyncSection";
 import AlertDialog from "@/components/common/AlertDialog";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import AnnouncerVoiceDialog from "@/components/settings/AnnouncerVoiceDialog";
-import ShareAppDialog, {
-  APP_DOWNLOAD_URL,
-} from "@/components/settings/ShareAppDialog";
+import ShareAppDialog from "@/components/settings/ShareAppDialog";
+import UpdateDownloadDialog from "@/components/settings/UpdateDownloadDialog";
 import TeamManagementModal from "@/components/team/TeamManagementModal";
 import { useCourtStore } from "@/store/courtStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -17,10 +16,10 @@ import { useStackStore } from "@/store/stackStore";
 import { useTeamStore } from "@/store/teamStore";
 import { useIsSmallDevice } from "@/hooks/useResponsiveColumns";
 import { useAppUpdateStore } from "@/store/appUpdateStore";
-import { isNewerVersion } from "@/utils/appUpdate";
+import { APP_DOWNLOAD_URL, isNewerVersion } from "@/utils/appUpdate";
 import Constants from "expo-constants";
 import React, { useRef, useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, Platform, ScrollView, View } from "react-native";
 import {
   ActivityIndicator,
   Button,
@@ -94,6 +93,10 @@ export default function SettingsScreen() {
   } = useAppUpdateStore();
   // Newest release version when it's newer than this build — drives the download prompt.
   const [availableUpdate, setAvailableUpdate] = useState<string | null>(null);
+  // Version being downloaded/installed in-app (Android); null = not updating.
+  const [installingVersion, setInstallingVersion] = useState<string | null>(
+    null,
+  );
   const [updateNotice, setUpdateNotice] = useState<{
     title: string;
     message: string;
@@ -575,14 +578,23 @@ export default function SettingsScreen() {
       <ConfirmDialog
         visible={!!availableUpdate}
         title="Update Available"
-        message={`StackMaster v${availableUpdate ?? ""} is available (you have v${appVersion}). Download the new APK now?`}
-        confirmLabel="Download"
+        message={`StackMaster v${availableUpdate ?? ""} is available (you have v${appVersion}). Update now?`}
+        confirmLabel="Update"
         destructive={false}
         onConfirm={() => {
+          const version = availableUpdate;
           setAvailableUpdate(null);
-          Linking.openURL(APP_DOWNLOAD_URL);
+          // Android downloads and installs in-app; elsewhere the APK can't
+          // be installed by the app, so it's the browser download as before.
+          if (Platform.OS === "android") setInstallingVersion(version);
+          else Linking.openURL(APP_DOWNLOAD_URL);
         }}
         onDismiss={() => setAvailableUpdate(null)}
+      />
+
+      <UpdateDownloadDialog
+        version={installingVersion}
+        onDismiss={() => setInstallingVersion(null)}
       />
 
       <AlertDialog

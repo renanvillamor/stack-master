@@ -4,6 +4,7 @@ import { useQuorumStore } from "@/store/quorumStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useStackStore } from "@/store/stackStore";
 import { parseReclubParticipants } from "@/utils/reclub";
+import { pickReclubFile, readReclubFile } from "@/utils/reclubFile";
 import { fetchReclubText } from "@/utils/reclubLink";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
@@ -24,7 +25,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { TouchableOpacity, View } from "react-native";
+import { Platform, TouchableOpacity, View } from "react-native";
 import {
   Button,
   Divider,
@@ -49,7 +50,12 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   const { addPlayer, clearAll: clearPlayers } = usePlayerStore();
   const { clearAll: clearStacks } = useStackStore();
   const { clearAll: clearQuorums } = useQuorumStore();
-  const { reclubImportLink, setReclubImportLink } = useSettingsStore();
+  const {
+    reclubImportLink,
+    setReclubImportLink,
+    reclubImportFile,
+    setReclubImportFile,
+  } = useSettingsStore();
 
   const [text, setText] = useState("");
   const [inputKey, setInputKey] = useState(0);
@@ -63,8 +69,11 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
   // race): it starts from the saved link and remounts via linkKey.
   const [linkInput, setLinkInput] = useState(reclubImportLink);
   const [linkKey, setLinkKey] = useState(0);
-  const [loadingLink, setLoadingLink] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
+  // One load at a time, from either source; they share the error line.
+  const [loadingFrom, setLoadingFrom] = useState<"link" | "file" | null>(
+    null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Saved settings rehydrate asynchronously; pick the link up once they do.
   useEffect(() => {
     setLinkInput(reclubImportLink);
@@ -123,7 +132,7 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
     setDeselected(new Set());
     setLinkInput(reclubImportLink);
     setLinkKey((k) => k + 1);
-    setLinkError(null);
+    setLoadError(null);
   };
 
   // The input is uncontrolled, so loaded text goes in through a remount.
@@ -139,24 +148,71 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
     const link = linkInput.trim();
     if (!link) return;
     setReclubImportLink(link);
-    setLinkError(null);
-    setLoadingLink(true);
+    setLoadError(null);
+    setLoadingFrom("link");
     try {
       showLoadedText(await fetchReclubText(link));
     } catch (err) {
-      setLinkError(
+      setLoadError(
         err instanceof Error ? err.message : "Couldn't load that link.",
       );
     } finally {
-      setLoadingLink(false);
+      setLoadingFrom(null);
     }
+  };
+
+  // Opens the system picker (device storage, Google Drive, ...) in the saved
+  // file's folder when the provider supports it, and remembers the pick.
+  const handleChooseFile = async () => {
+    setLoadError(null);
+    setLoadingFrom("file");
+    try {
+      const result = await pickReclubFile(reclubImportFile?.uri);
+      if (result) {
+        setReclubImportFile(result.file);
+        showLoadedText(result.text);
+      }
+    } catch {
+      setLoadError("Couldn't read that file. Choose a plain text (.txt) file.");
+    } finally {
+      setLoadingFrom(null);
+    }
+  };
+
+  const handleReloadFile = async () => {
+    if (!reclubImportFile) return;
+    setLoadError(null);
+    setLoadingFrom("file");
+    try {
+      showLoadedText(await readReclubFile(reclubImportFile.uri));
+    } catch {
+      setLoadError(
+        `Couldn't open ${reclubImportFile.label}. It may have been moved or deleted, or this phone is offline. Choose the file again.`,
+      );
+    } finally {
+      setLoadingFrom(null);
+    }
+  };
+
+  // The field shows a picked file in place of the link box; Load re-reads
+  // whichever is showing. File picking is native-only (expo-file-system).
+  const canPickFile = Platform.OS !== "web";
+  const showingFile = canPickFile && !!reclubImportFile;
+  const handleLoad = showingFile ? handleReloadFile : handleLoadLink;
+  const canLoad = showingFile || !!linkInput.trim();
+
+  // Clearing a file brings the saved link back into the field.
+  const handleClearFile = () => {
+    setReclubImportFile(null);
+    setLinkKey((k) => k + 1);
+    setLoadError(null);
   };
 
   const handleClearLink = () => {
     setReclubImportLink("");
     setLinkInput("");
     setLinkKey((k) => k + 1);
-    setLinkError(null);
+    setLoadError(null);
   };
 
   const renderBackdrop = useCallback(
@@ -249,8 +305,8 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
               variant="bodySmall"
               style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
             >
-              Paste the session details you copied from Reclub, or load them
-              from a link to a .txt file (e.g. Google Drive). Names
+              Load your Reclub session from a .txt file, or paste the details
+              you copied from Reclub. Names
               listed under &quot;Participants&quot; will replace your
               current player roster and queue. Courts are kept.
             </Text>
@@ -258,62 +314,132 @@ export default forwardRef<ImportReclubSheetRef>(function ImportReclubSheet(
           <Divider />
 
           <View style={{ padding: 20, paddingBottom: 12, gap: 12 }}>
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 6 }}>
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
               >
-                <View style={{ flex: 1, justifyContent: "center" }}>
-                  <BottomSheetTextInput
-                    key={linkKey}
-                    defaultValue={reclubImportLink}
-                    onChangeText={setLinkInput}
-                    placeholder="Google Drive link to a .txt file"
-                    placeholderTextColor={theme.colors.onSurfaceVariant}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                    returnKeyType="go"
-                    onSubmitEditing={handleLoadLink}
-                    editable={!loadingLink}
-                    testID="import-reclub-link-input"
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.outlineVariant,
-                      borderRadius: 10,
-                      paddingVertical: 10,
-                      paddingLeft: 12,
-                      paddingRight: linkInput ? 36 : 12,
-                      color: theme.colors.onSurface,
-                      backgroundColor: theme.colors.surfaceVariant + "40",
-                      fontSize: 14,
-                    }}
+                {/* One source field: a link box, or the picked file in its place */}
+                <View
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    minHeight: 48,
+                    borderWidth: 1,
+                    borderColor: theme.colors.outlineVariant,
+                    borderRadius: 12,
+                    backgroundColor: theme.colors.surfaceVariant + "40",
+                    paddingLeft: 12,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name={showingFile ? "file-document-outline" : "link-variant"}
+                    size={18}
+                    color={theme.colors.onSurfaceVariant}
                   />
-                  {!!linkInput && (
+                  {showingFile ? (
+                    <Text
+                      variant="bodyMedium"
+                      numberOfLines={1}
+                      style={{
+                        flex: 1,
+                        marginLeft: 8,
+                        color: theme.colors.onSurface,
+                      }}
+                      testID="import-reclub-file-label"
+                    >
+                      {reclubImportFile!.label}
+                    </Text>
+                  ) : (
+                    <BottomSheetTextInput
+                      key={linkKey}
+                      defaultValue={reclubImportLink}
+                      onChangeText={setLinkInput}
+                      placeholder="Google Drive link"
+                      placeholderTextColor={theme.colors.onSurfaceVariant}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      returnKeyType="go"
+                      onSubmitEditing={handleLoadLink}
+                      editable={!loadingFrom}
+                      testID="import-reclub-link-input"
+                      style={{
+                        flex: 1,
+                        marginLeft: 8,
+                        paddingVertical: 10,
+                        color: theme.colors.onSurface,
+                        fontSize: 14,
+                      }}
+                    />
+                  )}
+                  {(showingFile || !!linkInput) && (
                     <IconButton
                       icon="close"
                       size={16}
-                      onPress={handleClearLink}
-                      disabled={loadingLink}
-                      accessibilityLabel="Clear saved link"
-                      testID="import-reclub-clear-link"
-                      style={{ position: "absolute", right: 0, margin: 0 }}
+                      onPress={showingFile ? handleClearFile : handleClearLink}
+                      disabled={!!loadingFrom}
+                      accessibilityLabel={
+                        showingFile ? "Forget saved file" : "Clear saved link"
+                      }
+                      testID={
+                        showingFile
+                          ? "import-reclub-forget-file"
+                          : "import-reclub-clear-link"
+                      }
+                      style={{ margin: 0 }}
                     />
+                  )}
+                  {canPickFile && (
+                    <>
+                      <View
+                        style={{
+                          width: 1,
+                          alignSelf: "stretch",
+                          marginVertical: 8,
+                          backgroundColor: theme.colors.outlineVariant,
+                        }}
+                      />
+                      <IconButton
+                        icon="folder-open-outline"
+                        size={20}
+                        iconColor={theme.colors.primary}
+                        onPress={handleChooseFile}
+                        disabled={!!loadingFrom}
+                        accessibilityLabel="Choose a file from this phone or a drive"
+                        testID="import-reclub-choose-file"
+                        style={{ margin: 0 }}
+                      />
+                    </>
                   )}
                 </View>
                 <Button
                   mode="contained-tonal"
                   icon="download"
-                  onPress={handleLoadLink}
-                  loading={loadingLink}
-                  disabled={!linkInput.trim() || loadingLink}
-                  testID="import-reclub-load-link"
+                  onPress={handleLoad}
+                  loading={!!loadingFrom}
+                  disabled={!canLoad || !!loadingFrom}
+                  style={{ borderRadius: 12 }}
+                  contentStyle={{ height: 48 }}
+                  testID="import-reclub-load"
                 >
                   Load
                 </Button>
               </View>
-              {linkError && (
+              {loadError ? (
                 <Text variant="bodySmall" style={{ color: theme.colors.error }}>
-                  {linkError}
+                  {loadError}
+                </Text>
+              ) : (
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
+                  {showingFile
+                    ? "Load re-reads this file. Tap the folder to pick another."
+                    : canPickFile
+                      ? "Paste a link, or tap the folder to pick a file from this phone or a drive."
+                      : "Paste a link to a .txt file."}
                 </Text>
               )}
             </View>

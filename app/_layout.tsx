@@ -5,6 +5,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { PaperProvider, ThemeProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -25,7 +26,11 @@ export default function RootLayout() {
 
   // Quietly checks for a newer release so Settings → Update Version can flag
   // it. A failed check (offline) is ignored; tapping the tile retries.
+  // Skipped on web: the app ships only as an APK, and every web e2e test
+  // launch would otherwise spend the shared GitHub API allowance (on web the
+  // check falls back to the rate-limited API).
   useEffect(() => {
+    if (Platform.OS === "web") return;
     useAppUpdateStore
       .getState()
       .checkForUpdate()

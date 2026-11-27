@@ -1,4 +1,4 @@
-import { AnnouncerVoice } from "@/types";
+import { AnnouncerVoice, ReclubImportFile } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -34,6 +34,9 @@ interface SettingsState {
   /** Link (e.g. a Google Drive share link) to a .txt Reclub export, for Import from Reclub; "" = none. Per-device. */
   reclubImportLink: string;
   setReclubImportLink: (link: string) => void;
+  /** Last device/cloud file picked for Import from Reclub; null = none. Per-device. */
+  reclubImportFile: ReclubImportFile | null;
+  setReclubImportFile: (file: ReclubImportFile | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -112,6 +115,13 @@ export const useSettingsStore = create<SettingsState>()(
       setReclubImportLink: (link) =>
         set((state) => {
           state.reclubImportLink = link;
+        }),
+
+      reclubImportFile: null,
+
+      setReclubImportFile: (file) =>
+        set((state) => {
+          state.reclubImportFile = file;
         }),
     })),
     {

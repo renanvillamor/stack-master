@@ -1,3 +1,4 @@
+import { APP_DOWNLOAD_URL } from "@/utils/appUpdate";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useState } from "react";
 import { Share, useWindowDimensions, View } from "react-native";
@@ -12,14 +13,6 @@ import {
   Text,
   useTheme,
 } from "react-native-paper";
-
-/**
- * Direct APK download: GitHub redirects `releases/latest/download/<asset>` to that
- * asset on the newest release, so the QR never goes stale — but every release
- * must attach the APK under exactly this file name.
- */
-export const APP_DOWNLOAD_URL =
-  "https://github.com/renanvillamor/stack-master/releases/latest/download/StackMaster.apk";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/renanvillamor/stack-master/releases?per_page=100";

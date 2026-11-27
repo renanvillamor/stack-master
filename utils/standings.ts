@@ -3,15 +3,22 @@ import { Player, StandingRow } from "@/types";
 /**
  * Leaderboard order: most wins, then fewest losses (with equal wins that's
  * the same as the better win rate), then name, which only orders players
- * sharing a rank. Players with the same W–L record share a competition rank
- * (1, 2, 2, 4). Players with no games aren't ranked and go last.
+ * sharing a rank. Players with the same W–L record share a rank, and ranks
+ * count groups (1, 1, 2, 3), so they never skip a number. Players with no
+ * games aren't ranked and go last.
  */
 export function computeStandings(players: Player[]): StandingRow[] {
   const rows = players
     .map((player) => {
       const wins = player.history.filter((r) => r.result === "win").length;
       const losses = player.history.filter((r) => r.result === "loss").length;
-      return { player, wins, losses, matches: player.matches };
+      return {
+        player,
+        wins,
+        losses,
+        matches: player.matches,
+        winRate: player.matches > 0 ? wins / player.matches : null,
+      };
     })
     .sort((a, b) => {
       const aRanked = a.matches > 0 ? 1 : 0;
@@ -35,7 +42,7 @@ export function computeStandings(players: Player[]): StandingRow[] {
   }
 
   const result: StandingRow[] = [];
-  let position = 1;
+  let rank = 1;
   groups.forEach((group, i) => {
     const next = groups[i + 1];
     const edge: StandingRow["edge"] = next
@@ -51,14 +58,26 @@ export function computeStandings(players: Player[]): StandingRow[] {
             over: next.map((r) => r.player.name),
           }
       : null;
-    for (const row of group) {
-      result.push({ ...row, rank: position, tied: group.length > 1, edge });
-    }
-    position += group.length;
+    group.forEach((row, j) => {
+      result.push({
+        ...row,
+        rank,
+        tied: group.length > 1,
+        firstInRank: j === 0,
+        edge,
+      });
+    });
+    rank += 1;
   });
 
   for (const row of rows.slice(result.length)) {
-    result.push({ ...row, rank: null, tied: false, edge: null });
+    result.push({
+      ...row,
+      rank: null,
+      tied: false,
+      firstInRank: true,
+      edge: null,
+    });
   }
   return result;
 }
