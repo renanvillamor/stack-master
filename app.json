@@ -8,16 +8,16 @@
     "scheme": "stackmaster",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2D6A4F"
+      "backgroundColor": "#2073CA"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#2D6A4F",
+        "backgroundColor": "#0263D5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
